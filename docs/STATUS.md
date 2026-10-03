@@ -13,34 +13,59 @@
 | N-05 | 单一全局配置、本机浏览器偏好 | Config 与 storage 同步测试 |
 | N-06 | 卸载清理与输出故障隔离 | 取消、卸载、迟到 Promise、BEL 与日志故障测试 |
 | N-07 | 中文文档、AGENTS、CI 配置、打包与历史导出 | 本地构建、npm 包检查、bundle 恢复检查 |
+| N-08 | 完整 rc.2 Web 应用启动、两个 UI 入口、真实事件投递、认证边界 | 隔离 `DSH_HOME` 实机运行，见下 |
 
 ## 实际验证范围
 
 | 检查 | 结果 | 边界 |
 | --- | --- | --- |
-| `npm run check` | 89 项通过 | Node 24.18.0；CI 的 Node 22/Windows 矩阵尚未在 GitHub 运行 |
-| 干净依赖安装和构建测试 | 通过 | 使用锁文件与官方包缓存；不是借用整个 dsh 依赖树运行 |
+| `npm run check` | 93 项通过 | Node 24.21.0；CI 的 Node 22/Windows 矩阵尚未在 GitHub 运行 |
+| 干净依赖安装和构建测试 | 通过 | 使用锁文件与官方包缓存 |
 | npm rc.2 的真实 Cordis + SessionStore | 6 组通过 | 真实事件提交、观察器和卸载；无模型调用 |
-| master 的真实 Session 源码 | 相同 6 组通过 | 外部依赖仍使用锁定 npm 包；不是完整 master 应用 |
-| Host RPC 测试 | 通过 | Connection 为服务夹具；未把它当作真实 HTTP 鉴权验收 |
-| 官方 Connection 鉴权和 UI 契约 | 两基线源码核对通过 | 实际 HTTP/浏览器整链仍需下面 N-08 验收 |
-| Chrome 151 浏览器夹具 | 通过 | 实际 AudioContext、Notification、Web Locks 和 storage；独立夹具，不是完整 dsh 页面 |
-| npm rc.2 CLI 配置组合 | 通过 | `--dump-config` 中出现本插件与指定配置 |
-| 完整 dsh Web 启动 | 未完成 | 当前 shell 的回环监听被拒绝，报 `listen EPERM` |
-| dsh `--dump-config-schema` | 上游基线也失败 | 不加载插件与加载插件均出现相同的 4 条 Loader tree carrier 错误；未计作成功 |
-| `npm pack` | 通过 | 包含宿主源码、浏览器产物、patch 和许可证；不含参考报告、凭据或临时运行数据 |
+| master `5badb15` 的真实 Session 源码 | 相同 6 组通过 | 外部依赖仍使用锁定 npm 包；不是完整 master 应用 |
+| npm rc.2 完整 Web 应用 | 通过 | 隔离 `DSH_HOME` 与本机回环端口；未使用日常 profile |
+| 两个 UI 入口 | 通过 | 设置“常规”面板与会话头部铃铛都出现 |
+| 真实宿主事件到浏览器 | 通过 | 缺凭据回合触发真实 `agent/error`；浏览器播放错误音（`soundDelta` 3） |
+| 认证与跨站边界 | 通过 | 未认证 401、跨站 Origin 403、未声明方法 404、非法信封 400 |
+| master 的 Fetch 路由契约 | 源码核对通过 | 只读取 `rpc-host.ts` 与 `rpc.ts`，未在 master 上运行完整应用 |
+| Chrome 153 无头浏览器夹具 | 通过 | 实际 AudioContext、Notification、Web Locks 和 storage |
+| 完整 Windows 通知中心验收 | 未完成 | 见 N-09 |
+| `npm pack` | 通过 | 包含宿主源码、浏览器产物、patch 和许可证 |
 
-浏览器详细步骤见 [VALIDATION-browser.md](VALIDATION-browser.md)。测试使用虚构会话。没有消费用户的 API 额度，没有推送 GitHub，也没有发布 npm 包。
+测试使用虚构会话。没有消费用户的 API 额度，没有推送 GitHub，也没有发布 npm 包。验收使用的隔离目录是工作区外的 `~/.dsh-n08-acceptance`，可随时删除。
+
+## 本次确认的上游缺陷
+
+1. `connection.rpc.handle` 对晚加载的插件不可用。rc.2 与 master 都用调用方 Context 读取 `webServer` 登记前缀路由；Cordis 4 的服务属性读取沿 shadow 起点回溯到提供 `connection` 的 fiber，插件因此抛 `cannot get property "webServer" without inject`。错误只进入静默日志，通道不会注册，浏览器长轮询只能收到 405。修订前该缺陷使浏览器提醒在真实应用里完全不工作。
+2. 会话头部在空白状态只渲染 `conversation.session.header.corner`。`conversation.session.header.utilities` 要等会话非空后才渲染。这是官方行为，不是插件缺陷；验收必须先产生一次真实回合。
 
 ## 必须由接手环境补做
 
 | 编号 | 下一步 | 通过标准 |
 | --- | --- | --- |
-| N-08 | 在允许监听回环端口的环境启动完整 npm rc.2 与 master Web 应用 | 安装本地 tgz；两个 UI 入口出现；真实宿主事件经 RPC 到达浏览器；跨站/未认证请求被官方 Connection 拒绝 |
+| N-08 剩余 | 在已配置模型凭据的环境跑完“模型回答 → 任务完成提醒” | 正常结束的回合在浏览器出声并显示桌面通知；`minDuration` 门槛按需调低 |
+| N-08 剩余 | 在两条基线上重复同一套 Web 验收 | rc.2 与 master 都出现两个 UI 入口、都能投递真实事件、都拒绝跨站请求 |
 | N-09 | Windows Edge 或 Chrome 人工验收 | 五类通知可见且音效可听；点击返回正确会话；系统免打扰行为被记录 |
 | N-10 | 首次公开发布前检查 | 维护者确认名称、许可和署名；验证 CI；确定公开远端；人工创建 Release |
 
-N-08 不应靠修改真实用户 profile 解决。使用隔离的 `DSH_HOME`，按 HANDOFF 操作。N-09 无法由 Linux 无头浏览器结果代替。
+N-09 无法由 Linux 无头浏览器结果代替：本机已确认浏览器声音输出与 API 调用，但没有确认 Windows 横幅、通知中心和点击回会话。无头 Chromium 报告 `Notification.permission = denied`，所以本次桌面通知路径是被正确跳过的，不能算通过。
+
+### 复现完整 Web 验收
+
+```bash
+npm pack
+export DSH_HOME=/absolute/isolated/home
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add /absolute/path/dsh-state-notifier-0.1.0.tgz
+npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open --host 127.0.0.1 --port 7712
+# 用输出的 URL 与 token：
+DSH_ACCEPT_TURN=1 \
+DSH_WEB_URL="http://127.0.0.1:7712/?token=…" \
+DSH_ACCEPT_WORKSPACE=/absolute/acceptance/workspace \
+PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.js \
+node scripts/web-acceptance.mjs
+```
+
+`DSH_ACCEPT_TURN=1` 会真实发送提示词。在已配置凭据的 profile 上会产生模型调用；很快返回的完成回合可能被 `minDuration` 门槛过滤。不加该变量时脚本只检查认证边界、两个入口和订阅连接。
 
 ## 与参考项目的差异
 

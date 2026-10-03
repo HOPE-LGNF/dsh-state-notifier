@@ -40,7 +40,9 @@ Cordis 注册的监听和依赖由框架回收。手工定时器、等待请求�
 
 ## 传输协议
 
-公开通道为 `/state-notifier`，操作为 `poll`。客户端调用 `ctx.connection.rpc.call`。宿主使用 `ctx.connection.rpc.handle`。官方 Connection 负责 Host/Origin 检查、浏览器认证、请求关联与取消。插件不注册裸 HTTP 写接口。
+公开路由是共享 `/api` 通道上的精确 Fetch 路由 `/api/state-notifier`，请求方法为 POST。客户端调用 `ctx.connection.rpc.call('/api', 'state-notifier', request, signal)`。宿主使用 `ctx.connection.fetch.register({ path, methods: ['POST'], requestBody: 'buffered', fetch })`。官方 Connection 负责 Host/Origin 检查、浏览器认证、请求关联与取消。插件不注册裸 HTTP 写接口。
+
+不使用 `connection.rpc.handle`。rc.2 与 master 的实现都用调用方 Context 读取 `webServer` 登记前缀路由。Cordis 4 的服务属性读取会沿 shadow 起点回溯到提供 `connection` 的 fiber；晚于 `connection` 加载的插件因此抛 `cannot get property "webServer" without inject`。该错误只进入静默日志，通道不会注册，客户端只能收到 405。
 
 请求含 `clientId`、`browserReady`、`cursor`。游标为空时只取得当前基线。后续游标为 `{ epoch, seq }`。响应含 `epoch`、`cursor`、`reset`、`notices` 和 `playback`。
 

@@ -45,9 +45,9 @@ git -C /path/to/deepseek-harness rev-parse HEAD
 node scripts/check-upstream.mjs /path/to/deepseek-harness
 ```
 
-该命令构建并替换上游 Session 实现。其他依赖仍来自本项目锁文件。它验证真实事件提交和插件监听；它不是完整上游应用测试。还要核对 `connection.rpc.handle/call`、两个 UI 插槽和 `uiWorkspace.openSession` 的契约。
+该命令构建并替换上游 Session 实现。其他依赖仍来自本项目锁文件。它验证真实事件提交和插件监听；它不是完整上游应用测试。还要核对 `connection.fetch.register`、`connection.rpc.call`、两个 UI 插槽和 `uiWorkspace.openSession` 的契约。`connection.rpc.handle` 对晚加载的插件不可用，原因见 [调研](RESEARCH.md)。
 
-浏览器检查见 [VALIDATION-browser.md](VALIDATION-browser.md)。脚本使用已安装的 Playwright。它不增加插件运行依赖。
+浏览器检查见 [VALIDATION-browser.md](VALIDATION-browser.md)。脚本使用已安装的 Playwright。它不增加插件运行依赖。完整 Web 验收用 `scripts/web-acceptance.mjs`，准备步骤见 [状态与验收](STATUS.md)。
 
 ## 完整 dsh 验收
 

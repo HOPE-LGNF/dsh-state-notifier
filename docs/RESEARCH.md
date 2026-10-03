@@ -77,15 +77,16 @@ ding 还提供声音上传、长任务周期提醒、模板、配置导入导出
 | --- | --- | --- |
 | 五类通知所需 Host 事件 | 存在 | 存在 |
 | 会话头部 `.utilities` 与 `.actions` 插槽 | 存在 | 存在 |
-| Host `connection.rpc.handle(channel, handler)` | 存在 | 同签名 |
+| Host `connection.rpc.handle(channel, handler)` | 存在，但晚加载插件不可用 | 同签名，同样不可用 |
 | handler 参数 | `(endpoint, payload, signal, peer)` | 同签名 |
+| Host `connection.fetch.register(route)` 精确路由 | 存在 | 同签名 |
 | Client `connection.rpc.call(channel, endpoint, payload, signal?)` | 存在 | 同签名 |
 | 独立 RPC channel 的 Host/Origin 检查与浏览器认证 | 存在 | 存在 |
 | Loader Config 与官方设置页面 | 存在 | 存在 |
 | 浏览器 Notifications API | 由浏览器提供 | 由浏览器提供 |
-| 本项目完整运行验证 | 必须单独记录 | 必须单独记录 |
+| 本项目完整运行验证 | rc.2 完整 Web 通过 | 只做源码契约检查 |
 
-矩阵表示读取到的契约兼容。它不表示完整插件已在两条基线上运行通过。master 源码运行需要上游规定的构建环境。若只做接口检查，应将结果标记为“源码契约检查”。
+矩阵表示读取到的契约兼容。第 80 行的结论来自完整 Web 运行，不是源码核对：接口存在，但对晚于 `connection` 加载的插件必然抛错。master 源码运行需要上游规定的构建环境，本次只读取 `rpc-host.ts` 与 `rpc.ts` 确认 Fetch 路由契约相同。
 
 已增加真实会话集成验证：`test/integration.test.js` 在 npm SessionStore 上通过 6 组测试；通过 `DSH_SESSION_SOURCE` 改用 master 的 `packages/core/session/src/index.ts` 后，同一组 6 个测试也通过。测试覆盖五类通知、重复事件、误报反例、阈值、事件开关及卸载重载。审批和提问事件由真实 Session 提交；goal 与 Agent 错误由 Cordis 载荷夹具派发。此验证不启动模型，也不等于完整 master 应用端到端验证。
 
@@ -103,9 +104,11 @@ master 验证运行命令为 `DSH_SESSION_SOURCE=<master Session index.ts 的绝
 
 ### 流与客户端
 
-由 Host 分类事件，然后只向 Client 发送语义通知。本项目选择官方 Connection RPC 的长轮询作为传输。Host 使用 `ctx.connection.rpc.handle('/state-notifier', handler)`；Client 使用 `ctx.connection.rpc.call('/state-notifier', endpoint, payload, signal)`。每次请求最多等待 25 秒。事件日志使用有界缓存和游标。无需另建 SSE 服务或原生脚本协议。
+由 Host 分类事件，然后只向 Client 发送语义通知。本项目选择官方 Connection 的长轮询作为传输：Host 把订阅注册为共享 `/api` 通道上的精确 Fetch 路由 `/api/state-notifier`，Client 使用 `ctx.connection.rpc.call('/api', 'state-notifier', payload, signal)`。每次请求最多等待 25 秒。事件日志使用有界缓存和游标。无需另建 SSE 服务或原生脚本协议。
 
-该选择保留官方 Host/Origin 检查、浏览器认证、请求关联和取消信号。它也避免维护手写 Typert manifest，或依赖 SRC 方法参数名称解析。独立 channel 的请求先通过 `admit()`，然后由官方 HTTP bridge 调用插件 handler。Client caller 没有固定内部超时，插件负责自己的等待时间。[Host RPC 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts)、[Client RPC 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/client/rpc.ts)
+最初选择的是 `ctx.connection.rpc.handle('/state-notifier', handler)`。完整 Web 验收证明该接口对晚加载的插件不可用：rc.2 与 master 的 `register()` 都用调用方 Context 读取 `webServer` 来登记前缀路由（[rc.2 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts) 第 192 行）。Cordis 4 的服务属性读取沿 shadow 起点回溯到提供 `connection` 的 fiber，插件因此抛 `cannot get property "webServer" without inject`；错误只进入静默日志，通道不会注册，浏览器长轮询收到 405。`connection.fetch.register` 不读取其它服务，因此不受该缺陷影响，并同样经过官方信任边界与浏览器认证。
+
+该选择保留官方 Host/Origin 检查、浏览器认证、请求关联和取消信号。它也避免维护手写 Typert manifest，或依赖 SRC 方法参数名称解析。Fetch 路由由官方 carrier 在完成信任与认证检查后调用，请求取消通过 Request 的 AbortSignal 传递。Client caller 没有固定内部超时，插件负责自己的等待时间。[Host RPC 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts)、[Client RPC 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/client/rpc.ts)
 
 长轮询需要四个约束：日志查询与等待器注册之间不能丢失唤醒；请求取消或插件卸载时必须结束等待；日志淘汰造成的游标缺口必须显式报告；插件重载或 Host 重启后必须通过实例标识识别游标重新计数。对这些条件应写竞态测试。该传输设计不提供持久离线通知保证。
 
