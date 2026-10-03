@@ -9,13 +9,13 @@ node --test --test-isolation=none test/browser.test.js
 运行真实 Chromium 夹具（需要机器已有 Playwright 与 Chrome，无需给插件增加开发依赖）：
 
 ```bash
-PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.js node scripts/browser-smoke.mjs
+PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node scripts/browser-smoke.mjs
 ```
 
 在批准 `node --test` 的受限执行环境中，也可使用同一脚本的测试入口：
 
 ```bash
-PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.js node --test --test-isolation=none scripts/browser-smoke.mjs
+PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node --test --test-isolation=none scripts/browser-smoke.mjs
 ```
 
 如项目外的 Node 环境能直接解析 `playwright`，可省略变量。`PLAYWRIGHT_CHANNEL` 默认为 `chrome`，也可以设为已安装的 `msedge`。
@@ -33,8 +33,8 @@ PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.js node --test --test-isola
 ```bash
 DSH_ACCEPT_TURN=1 \
 DSH_WEB_URL="http://127.0.0.1:7712/?token=…" \
-DSH_ACCEPT_WORKSPACE=/absolute/acceptance/workspace \
-PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.js \
+DSH_ACCEPT_WORKSPACE="$HOME/.dsh-notifier-acceptance/acceptance-workspace" \
+PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" \
 node scripts/web-acceptance.mjs
 ```
 

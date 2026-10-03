@@ -2,8 +2,8 @@
 // 它要求一个已启动并已安装本插件的 dsh Web 实例，不启动应用、不读取真实会话正文。
 // 用法：
 //   DSH_WEB_URL="http://127.0.0.1:7712/?token=..." \
-//   DSH_ACCEPT_WORKSPACE=/absolute/path/to/workspace \
-//   PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.js \
+//   DSH_ACCEPT_WORKSPACE="$HOME/.dsh-notifier-acceptance/acceptance-workspace" \
+//   PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" \
 //   node scripts/web-acceptance.mjs
 // 只有设置 DSH_ACCEPT_TURN=1 才会发送提示词。回合会真实调用宿主配置的模型：
 // 在已配置凭据且模型很快返回的 profile 上，完成提醒可能被 minDuration 门槛过滤；

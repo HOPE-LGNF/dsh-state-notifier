@@ -53,17 +53,20 @@ N-09 无法由 Linux 无头浏览器结果代替：本机已确认浏览器声�
 ### 复现完整 Web 验收
 
 ```bash
+cd "$HOME/projects/dsh-state-notifier"          # 换成你本机真实的仓库路径
 npm pack
-export DSH_HOME=/absolute/isolated/home
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add /absolute/path/dsh-state-notifier-0.1.0.tgz
+export DSH_HOME="$HOME/.dsh-notifier-acceptance"  # 必须是有写权限的真实目录
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.1.0.tgz"
 npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open --host 127.0.0.1 --port 7712
-# 用输出的 URL 与 token：
+# 用上面打印的 URL 与 token：
 DSH_ACCEPT_TURN=1 \
 DSH_WEB_URL="http://127.0.0.1:7712/?token=…" \
-DSH_ACCEPT_WORKSPACE=/absolute/acceptance/workspace \
-PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.js \
+DSH_ACCEPT_WORKSPACE="$DSH_HOME/acceptance-workspace" \
+PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" \
 node scripts/web-acceptance.mjs
 ```
+
+上面的路径都是示例。`DSH_HOME` 必须指向真实且可写的目录；照抄占位符会让 dsh 尝试创建不存在的根目录并以 `EACCES` 失败。
 
 `DSH_ACCEPT_TURN=1` 会真实发送提示词。在已配置凭据的 profile 上会产生模型调用；很快返回的完成回合可能被 `minDuration` 门槛过滤。不加该变量时脚本只检查认证边界、两个入口和订阅连接。
 
