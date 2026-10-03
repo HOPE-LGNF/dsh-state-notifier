@@ -1,0 +1,7 @@
+- insert:
+    - id: state-notifier
+      name: dsh-state-notifier
+      config:
+        enabled: true
+        playback: auto
+        minDuration: 10

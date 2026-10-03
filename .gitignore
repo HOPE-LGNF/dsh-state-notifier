@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.local/
+artifacts/
+reference/
+*.tgz
+*.bundle
+.DS_Store
