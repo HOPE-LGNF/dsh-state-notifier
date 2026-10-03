@@ -22,7 +22,7 @@
 
 `latest` 会变化。维护者必须记录测试时解析出的具体版本。master 在本次调研时已经领先发布版。本文中的路径以仓库相对路径或 npm 包内相对路径表达。[官方 CLI 版本声明](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/apps/cli/package.json)、[bell 版本声明](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/package.json)、[ding 版本声明](https://github.com/CAOGGL/dsh-ding/blob/92a862a/package.json)
 
-用户提供的两个 ChatGPT 链接本次无法读取。本项目不能声称已参考其中的具体观点。版本管理需依据明确的仓库规范制定。
+两个 ChatGPT 链接最初未返回正文。用户随后在对话中粘贴了版本管理建议和四个插件的对比评审。本文已参考粘贴正文；不声称独立打开了私人会话。版本管理采用清晰提交、SemVer、精简 CHANGELOG、固定 tag 和人工发布。
 
 ## bell 功能基准
 
@@ -35,13 +35,13 @@
 | 错误 | `agent/error` 通知 | 与普通 shell 非零退出码区分 |
 | 独立声音 | `done`、`permission`、`question`、`block`、`error` | 语义类别与播放设备分开 |
 | 播放设备 | browser、backend、none | 给出实际可用状态；不能静默丢弃 |
-| 后端声音 | Windows/WSL SoundPlayer；Linux 本机播放器；失败可回退 BEL | 保留平台适配边界；记录失败和回退 |
+| 后端声音 | Windows/WSL SoundPlayer；Linux 本机播放器；失败可回退 BEL | 第一版只保留 BEL；未移植外部播放器 |
 | 静音 | Web 铃铛开关，立即生效 | 状态可见，设置可保存 |
-| 时长过滤 | 完成通知低于 `minDuration` 时只记日志 | 审批和提问不受该阈值影响 |
-| 单事件配置 | 每类事件有开关和声音选择 | 显式默认值也必须生效 |
-| 声音包 | 内置 WAV；自定义 WAV 目录；BEL 配置 | 包内资源能直接使用；校验资源存在 |
-| UI | 会话头部铃铛、主题适配、中文/英文 | 使用当前官方插槽；不要复制旧客户端加载代码 |
-| 日志 | 分类结果、摘要和时长 | 对降级和错误给出可诊断信息 |
+| 时长过滤 | 完成通知低于 `minDuration` 时只记日志 | 本实现低于门槛不发通知日志；审批和提问不受阈值影响 |
+| 单事件配置 | 每类事件有开关和声音选择 | 保留独立开关；音色固定，未移植映射配置 |
+| 声音包 | 内置 WAV；自定义 WAV 目录；BEL 配置 | 使用五种合成音，无文件依赖；WAV 未移植 |
+| UI | 会话头部铃铛、主题适配、中文/英文 | 使用当前官方插槽与中文界面；未提供英文切换 |
+| 日志 | 分类结果、摘要和时长 | 只记录分类及诊断，减少任务正文外露 |
 | 生命周期 | 会话销毁时回收状态 | 插件卸载时也关闭连接、定时器和播放器 |
 
 基准来自 [bell README](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/README.zh.md)、[事件分类](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/src/events.js)、[完成判定](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/src/turns.js)。这些是功能参考，不是复制其架构的理由。
@@ -87,13 +87,17 @@ ding 还提供声音上传、长任务周期提醒、模板、配置导入导出
 
 矩阵表示读取到的契约兼容。它不表示完整插件已在两条基线上运行通过。master 源码运行需要上游规定的构建环境。若只做接口检查，应将结果标记为“源码契约检查”。
 
+已增加真实会话集成验证：`test/integration.test.js` 在 npm SessionStore 上通过 6 组测试；通过 `DSH_SESSION_SOURCE` 改用 master 的 `packages/core/session/src/index.ts` 后，同一组 6 个测试也通过。测试覆盖五类通知、重复事件、误报反例、阈值、事件开关及卸载重载。审批和提问事件由真实 Session 提交；goal 与 Agent 错误由 Cordis 载荷夹具派发。此验证不启动模型，也不等于完整 master 应用端到端验证。
+
+master 验证运行命令为 `DSH_SESSION_SOURCE=<master Session index.ts 的绝对路径> node --experimental-transform-types test/integration.test.js`。本次 Node `24.18.0` 在添加 `--test` 后只报告文件级通过，未列出 6 组用例；因此采用直接运行 node:test 文件的方式，并检查输出中实际测试数量。
+
 证据：npm `@deepseek-ai/dsh-client-connection@0.2.0-rc.2` 的 `lib/types/rpc.d.ts`、`lib/types/rpc-host.d.ts`、`lib/types/client/rpc.d.ts`；[master Host RPC](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts)、[master Client RPC](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/client/rpc.ts)。
 
 ### 完成判定
 
 `turn/end.reason.kind = completed` 只说明回合正常关闭。空输入与工具主动结束回合也可能满足此条件。严格完成通知还需满足：最后的 assistant 消息有非空文本、没有工具调用块、其后没有工具调用，且消息未标记 `interrupted`。回合发生错误、取消或被工具结束时，不能通知为成功。
 
-时长使用事件时间，不使用收到事件时的本机时间。摘要只读取 `user/message.source.kind = user`。子代理信息可由会话头的 `delegationDepth` 与 `origin` 排除。必须在销毁时回收每个会话的跟踪状态。[会话类型](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/core/session/src/types.ts)、[回合流程](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/docs/architecture.md#turn-flow)
+时长使用事件时间，不使用收到事件时的本机时间。本实现不提取用户正文摘要。子代理信息由会话头的 `delegationDepth` 与 `origin` 排除。销毁时回收每个会话的跟踪状态。[会话类型](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/core/session/src/types.ts)、[回合流程](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/docs/architecture.md#turn-flow)
 
 当前 `assistant/message` 包含内嵌 `stream`。旧测试夹具用 `sourceEventSeqs` 表达其来源，已不符合接口。应使用当前 Session API 验证真实事件提交。
 

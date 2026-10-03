@@ -6,3 +6,4 @@ reference/
 *.tgz
 *.bundle
 .DS_Store
+.upstream-check-*/
