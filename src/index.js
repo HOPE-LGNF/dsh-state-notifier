@@ -23,14 +23,21 @@ export function apply(ctx, input = {}, output = {}) {
   const timers = new Set();
   let disposed = false;
   let warned = false;
+  const warnSafely = message => {
+    try { warn(message)?.catch?.(() => {}); } catch { /* 告警本身也不能影响 Agent。 */ }
+  };
+  const outputFailed = () => warnSafely('[state-notifier] 通知输出失败；Agent 继续运行。');
+  const writeSafely = text => {
+    try { write(text)?.catch?.(outputFailed); } catch { outputFailed(); }
+  };
   const bell = kind => {
     if (!isTTY()) {
-      if (!warned) { warned = true; warn('[state-notifier] 终端不支持 BEL；通知仅记录到日志。请打开浏览器并启用通知。'); }
+      if (!warned) { warned = true; warnSafely('[state-notifier] 终端不支持 BEL；通知仅记录到日志。请打开浏览器并启用通知。'); }
       return;
     }
     const count = kind === 'complete' ? 1 : kind === 'error' || kind === 'block' ? 3 : 2;
     for (let i = 0; i < count; i++) {
-      const timer = setTimeout(() => { timers.delete(timer); if (!disposed) write('\x07'); }, i * 150);
+      const timer = setTimeout(() => { timers.delete(timer); if (!disposed) writeSafely('\x07'); }, i * 150);
       timer.unref?.();
       timers.add(timer);
     }
@@ -39,12 +46,12 @@ export function apply(ctx, input = {}, output = {}) {
     enabled: config.enabled, events: config.events, minDurationMs: config.minDuration * 1000,
     onNotice(notice) {
       if (disposed) return;
-      // 不让声音、日志或传输失败改变 Agent 的执行结果。
+      // 独立输出，日志失败不能阻断浏览器通知或终端提醒。
+      writeSafely(`[state-notifier] ${labels[notice.kind]}\n`);
+      try { journal.publish(notice); } catch { outputFailed(); }
       try {
-        write(`[state-notifier] ${labels[notice.kind]}\n`);
-        journal.publish(notice);
         if (config.playback === 'terminal' || (config.playback === 'auto' && !journal.hasBrowser())) bell(notice.kind);
-      } catch { warn('[state-notifier] 通知输出失败；Agent 继续运行。'); }
+      } catch { outputFailed(); }
     },
   });
   ctx.on('session/event', (session, event) => notifier.sessionEvent(session, event));
