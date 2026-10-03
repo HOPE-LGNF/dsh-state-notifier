@@ -49,7 +49,8 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
   const audioReady = () => !!audio && unlocked && audio.state === 'running';
   const soundReady = () => prefs.sound && prefs.volume > 0 && audioReady() && !soundError;
   const desktopReady = () => prefs.desktop && permission() === 'granted' && !desktopFailed;
-  const browserReady = () => !disposed && storageAvailable && prefs.enabled && !muted() && (soundReady() || desktopReady());
+  // 前台静默仍由浏览器承接事件，避免主机自动策略回落到终端响铃。
+  const browserReady = () => !disposed && storageAvailable && prefs.enabled && (soundReady() || desktopReady());
   function snapshot() {
     return {
       preferences: { ...prefs }, browserReady: browserReady(), permission: permission(),
@@ -211,7 +212,7 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
     if (disposed || !notice || typeof notice.id !== 'string' || typeof notice.sessionId !== 'string' || !Object.hasOwn(LABELS, notice.kind)) return;
     const send = () => {
       // 等待其他标签页释放发送锁期间，用户可能已修改设置。
-      if (!browserReady() || (playback !== 'auto' && playback !== 'browser')) return;
+      if (!browserReady() || muted() || (playback !== 'auto' && playback !== 'browser')) return;
       const saved = read(RECEIPTS_KEY, []);
       if (!storageAvailable) { publish(); return; }
       const receipts = Array.isArray(saved) ? saved.filter(row => row && typeof row.id === 'string').slice(-256) : [];

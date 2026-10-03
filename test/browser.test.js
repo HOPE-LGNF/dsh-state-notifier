@@ -59,6 +59,31 @@ test('settings take effect immediately and storage changes synchronize preferenc
   assert.equal(h.closed(), 1);
 });
 
+test('前台静音仍承接事件，后台恢复后下一事件正常输出', async () => {
+  const h = harness();
+  let focused = true;
+  h.env.document.visibilityState = 'visible';
+  h.env.document.hasFocus = () => focused;
+  const n = createBrowserNotifier(h.env);
+  await n.enableSound();
+  n.update({ quietWhenFocused: true });
+  const before = h.starts();
+  assert.equal(n.browserReady(), true);
+  await n.deliver(event);
+  assert.equal(h.starts(), before);
+  assert.equal(h.shown.length, 0);
+  assert.equal(h.storage.has(RECEIPTS_KEY), false);
+  focused = false;
+  h.env.document.visibilityState = 'hidden';
+  h.listeners.get('blur')();
+  assert.equal(n.browserReady(), true);
+  await n.deliver({ ...event, id: 'epoch:background' });
+  assert.equal(h.starts() - before, 3);
+  assert.equal(h.shown.length, 1);
+  assert.equal(JSON.parse(h.storage.get(RECEIPTS_KEY))[0].id, 'epoch:background');
+  n.dispose();
+});
+
 test('two tabs deliver one event once per successful channel under Web Locks', async () => {
   const storage = new Map();
   const locks = serializedLocks();
