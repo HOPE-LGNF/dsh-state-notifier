@@ -4,6 +4,15 @@
 
 ## 未发布
 
+### 修复
+
+- 修复浏览器提醒在 dsh `0.2.0-rc.2` 上完全无法连接的问题。原实现用 `connection.rpc.handle` 注册通道；官方实现会用调用方 Context 读取 `webServer`，晚于 `connection` 加载的插件注册必然失败，错误只进入静默日志。现在改用官方受认证的精确 Fetch 路由 `/api/state-notifier`，信任边界、浏览器认证、请求关联与取消仍由官方 Connection 负责。
+
+### 文档
+
+- 记录会话头部铃铛只在会话非空后渲染的官方行为，避免把它当作插件缺陷。
+- 增加完整 dsh Web 验收脚本 `scripts/web-acceptance.mjs` 与运行说明。
+
 ## 0.1.0 - 2026-10-03
 
 ### 新增

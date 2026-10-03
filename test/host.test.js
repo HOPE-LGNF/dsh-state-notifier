@@ -8,20 +8,26 @@ import { SessionStore } from '@deepseek-ai/dsh-session';
 import { apply } from '../src/index.js';
 
 // Connection 仅替换运输边界。此套件不启动 HTTP，不验证真实网络认证。
+// fetch.register 复刻官方 registerFetchRoute：只用调用方 Context 登记 Effect，不读取其它服务。
 class TestConnection extends Service {
-  channels = new Map();
+  routes = new Map();
   removals = 0;
   constructor(ctx) { super(ctx, 'connection'); }
-  get rpc() {
+  get fetch() {
+    const owner = this.ctx;
     return {
-      handle: (channel, handler) => {
-        assert.equal(channel, '/state-notifier');
-        assert.equal(this.channels.has(channel), false, '旧 channel 必须先释放');
-        this.channels.set(channel, handler);
-        return async () => {
-          if (this.channels.get(channel) === handler) this.channels.delete(channel);
-          this.removals += 1;
-        };
+      register: (route) => {
+        assert.equal(route.path, '/api/state-notifier');
+        assert.deepEqual(route.methods, ['POST']);
+        assert.equal(route.requestBody, 'buffered');
+        return owner.effect(() => {
+          assert.equal(this.routes.has(route.path), false, '旧路由必须先释放');
+          this.routes.set(route.path, route);
+          return async () => {
+            if (this.routes.get(route.path) === route) this.routes.delete(route.path);
+            this.removals += 1;
+          };
+        }, `fixture: ${route.path}`);
       },
     };
   }
@@ -38,6 +44,24 @@ async function within(promise, ms = 1000) {
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('等待通知操作超时')), ms); }),
     ]);
   } finally { clearTimeout(timer); }
+}
+
+function transportOf(connection) {
+  return async (payload, signal = new AbortController().signal) => {
+    const route = connection.routes.get('/api/state-notifier');
+    assert.equal(typeof route?.fetch, 'function', '插件必须实际注册受认证的精确 Fetch 路由');
+    const request = new Request('http://dsh.internal/api/state-notifier', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId: 'host-test-rpc', method: 'state-notifier', payload }),
+      signal,
+    });
+    const response = await route.fetch(request);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.type, 'server-response');
+    assert.equal(body.rpcId, 'host-test-rpc');
+    return body.result;
+  };
 }
 
 async function boot(config = {}, output = {}) {
@@ -58,15 +82,11 @@ async function boot(config = {}, output = {}) {
   });
   await fiber;
   const connection = root.connection;
-  const handler = connection.channels.get('/state-notifier');
-  assert.equal(typeof handler, 'function', '插件必须实际注册 RPC handler');
   const session = root.sessions.create('host-fixture');
   let id = 0;
   return {
     root, fiber, connection, writes, warnings, session,
-    call(payload, endpoint = 'poll', signal = new AbortController().signal) {
-      return handler(endpoint, payload, signal, { role: 'operator' });
-    },
+    call: transportOf(connection),
     approval() {
       return session.append('approval/asked', { id: `approval-${++id}`, toolName: 'shell', reason: '需要批准' });
     },
@@ -74,9 +94,64 @@ async function boot(config = {}, output = {}) {
   };
 }
 
+// 官方 rpc.handle 在 rc.2 与 master 都用调用方 Context 读 webServer；Cordis 沿 shadow 起点回溯，
+// 晚加载的插件必然抛错，因此本插件改用 connection.fetch。此 fixture 同时保留会抛错的 rpc 面。
+class RealisticConnection extends Service {
+  constructor(ctx) { super(ctx, 'connection'); }
+  get rpc() {
+    const owner = this.ctx;
+    return {
+      handle: (channel, handler) => owner.effect(() => owner.webServer.register({ kind: 'prefix', path: channel, handler }), `fixture: ${channel}`),
+    };
+  }
+  get fetch() {
+    const owner = this.ctx;
+    return {
+      register: route => owner.effect(() => {
+        this.routes ??= new Map();
+        this.routes.set(route.path, route);
+        return () => this.routes.delete(route.path);
+      }, `fixture: ${route.path}`),
+    };
+  }
+}
+
 const request = (cursor = null, browserReady = false) => ({ clientId: 'host-test-tab', browserReady, cursor });
 const cursorOf = value => ({ epoch: value.epoch, seq: value.cursor });
 const bells = writes => writes.filter(value => value === '\x07').length;
+
+test('Host 注册：服务晚到时也必须完成受认证路由注册与释放', async t => {
+  // 旧实现用 connection.rpc.handle；rc.2 宿主里 owner.webServer 抛错，路由静默不注册。
+  for (const late of [false, true]) await t.test(late ? '服务后到' : '服务先到', async t => {
+    const root = new Context();
+    t.after(() => root.fiber.dispose());
+    if (!late) await root.plugin(RealisticConnection);
+    const fiber = root.plugin({
+      name: 'state-notifier-registration-fixture',
+      apply(ctx) {
+        apply(ctx, { playback: 'none', minDuration: 0 }, { write() {}, warn() {}, isTTY: () => false });
+      },
+    });
+    await fiber;
+    if (late) { await root.plugin(RealisticConnection); await delay(20); }
+    assert.equal(typeof root.connection.routes.get('/api/state-notifier')?.fetch, 'function', '插件必须实际注册官方 Fetch 路由');
+    await within(fiber.dispose());
+    assert.equal(root.connection.routes.has('/api/state-notifier'), false, '卸载必须释放路由');
+  });
+});
+
+test('Host 注册：错误信封与未知操作不进入长轮询', async t => {
+  const h = await boot();
+  t.after(() => h.stop());
+  const route = h.connection.routes.get('/api/state-notifier');
+  const post = body => route.fetch(new Request('http://dsh.internal/api/state-notifier', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body,
+  }));
+  assert.equal((await post('not json')).status, 400);
+  assert.equal((await post(JSON.stringify({ type: 'client-request', rpcId: 'x', method: 'other', payload: request() }))).status, 400);
+  assert.equal((await within(h.call(request()))).ok, true, '后续合法请求仍能工作');
+});
+
 
 test('Host RPC：首次基线、审批唤醒等待和重复游标重读', async t => {
   const h = await boot();
@@ -112,9 +187,7 @@ test('Host RPC：无效参数和未知 endpoint 返回明确失败，后续合�
     assert.equal(result.ok, false);
     assert.equal(result.error.code, 'bad-request');
   }
-  const missing = await within(h.call(request(), 'missing'));
-  assert.equal(missing.ok, false);
-  assert.equal(missing.error.code, 'not-found');
+  // 未知操作不会再到达插件：官方精确路由已按方法分发，插件只处理声明过的操作。
   assert.equal((await within(h.call(request()))).ok, true);
 });
 
@@ -128,7 +201,7 @@ test('Host RPC：卸载释放挂起请求与异步 channel disposer，停止观�
   const result = await within(pending);
   assert.equal(result.ok, false);
   assert.equal(result.error.code, 'unavailable');
-  assert.equal(h.connection.channels.size, 0);
+  assert.equal(h.connection.routes.size, 0);
   assert.equal(h.connection.removals, 1, '异步 disposer 必须被 Cordis 调用且只调用一次');
   h.approval();
   assert.deepEqual(h.writes, []);
@@ -141,7 +214,7 @@ test('Host RPC：取消请求结束等待，后续请求能收到审批', async 
   const baseline = await within(h.call(request()));
   const cursor = cursorOf(baseline.value);
   const controller = new AbortController();
-  const pending = h.call(request(cursor), 'poll', controller.signal);
+  const pending = h.call(request(cursor), controller.signal);
   controller.abort();
   assert.equal((await within(pending)).error.code, 'unavailable');
   h.approval();

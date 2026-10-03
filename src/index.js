@@ -58,15 +58,30 @@ export function apply(ctx, input = {}, output = {}) {
   ctx.on('goal/changed', payload => notifier.goalChanged(payload));
   ctx.on('agent/error', payload => notifier.agentError(payload));
   ctx.on('session/disposed', session => notifier.disposeSession(session));
-  ctx.inject(['connection'], web => {
-    web.effect(() => web.connection.rpc.handle('/state-notifier', async (endpoint, payload, signal) => {
-      if (endpoint !== 'poll') return { ok: false, error: { code: 'not-found', message: '未知通知操作', details: {} } };
-      try {
-        return { ok: true, value: { ...await journal.poll(payload, signal), playback: config.playback } };
-      } catch (error) {
-        return { ok: false, error: { code: error instanceof TypeError ? 'bad-request' : 'unavailable', message: '通知订阅暂不可用', details: {} } };
+  // rc.2 与 master 的 connection.rpc.handle 都用调用方 Context 读 webServer 注册前缀路由。
+  // 该读取沿 shadow 起点回溯，晚加载的插件必然拿不到 webServer；改用官方受认证的精确 Fetch 路由。
+  const route = {
+    path: '/api/state-notifier',
+    methods: ['POST'],
+    requestBody: 'buffered',
+    async fetch(request) {
+      let body;
+      try { body = await request.json(); } catch { return new Response('body is not JSON', { status: 400 }); }
+      if (!body || typeof body !== 'object' || Array.isArray(body) || body.type !== 'client-request'
+        || typeof body.rpcId !== 'string' || body.method !== 'state-notifier') {
+        return new Response('invalid client-request', { status: 400 });
       }
-    }), 'state-notifier: 受认证的通知订阅');
+      let result;
+      try {
+        result = { ok: true, value: { ...await journal.poll(body.payload, request.signal), playback: config.playback } };
+      } catch (error) {
+        result = { ok: false, error: { code: error instanceof TypeError ? 'bad-request' : 'unavailable', message: '通知订阅暂不可用', details: {} } };
+      }
+      return Response.json({ type: 'server-response', rpcId: body.rpcId, result });
+    },
+  };
+  ctx.inject(['connection'], web => {
+    web.effect(() => web.connection.fetch.register(route), 'state-notifier: 受认证的通知订阅');
   });
   ctx.effect(() => () => {
     disposed = true;

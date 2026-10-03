@@ -276,7 +276,7 @@ export function startPolling(rpc, notifier, env = globalThis) {
     while (!stopped) {
       pending = new AbortController();
       try {
-        const result = await rpc.call('/state-notifier', 'poll', { cursor, clientId, browserReady: notifier.browserReady() }, pending.signal);
+        const result = await rpc.call('/api', 'state-notifier', { cursor, clientId, browserReady: notifier.browserReady() }, pending.signal);
         if (stopped) break;
         if (pending.signal.aborted) continue;
         const value = result?.ok && result.value;

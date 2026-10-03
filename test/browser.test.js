@@ -216,7 +216,9 @@ test('polls advance the epoch cursor, abort immediately on readiness changes, an
   const n = createBrowserNotifier(h.env);
   const calls = [];
   let active = 0, maxActive = 0;
-  const rpc = { call(_channel, _endpoint, payload, signal) {
+  const rpc = { call(channel, endpoint, payload, signal) {
+    // 固定官方受认证路由契约：共享 /api 通道上的 state-notifier 精确路由。
+    assert.equal(channel, '/api'); assert.equal(endpoint, 'state-notifier');
     calls.push(payload); active++; maxActive = Math.max(maxActive, active);
     if (calls.length === 1) { active--; return Promise.resolve({ ok: true, value: { epoch: 'epoch', cursor: 4, reset: false, notices: [], playback: 'auto' } }); }
     return new Promise((_resolve, reject) => signal.addEventListener('abort', () => { active--; reject(new Error('abort')); }, { once: true }));
