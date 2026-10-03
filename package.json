@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.js",
+    "test": "node --test --test-isolation=none test/*.test.js",
     "check": "npm run build && npm test",
     "prepack": "npm run build"
   },
