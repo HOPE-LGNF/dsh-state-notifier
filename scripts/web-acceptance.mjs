@@ -84,50 +84,44 @@ try {
 
   // 2. “常规”设置入口必须出现，并显示已连接到宿主订阅。声音也在这里解锁，位置与会话是否非空无关。
   await page.getByRole('button', { name: 'Settings' }).first().click({ force: true });
-  await page.waitForTimeout(2500);
-  let text = await page.evaluate(() => document.body.innerText);
-  assert.equal(text.includes('任务状态提醒'), true, '设置页必须出现通知面板');
-  // 状态区是默认折叠的 details；不展开时 innerText 读不到内容。
-  const runtime = page.getByText('权限及运行信息', { exact: true }).first();
-  if (await runtime.count()) { await runtime.click({ force: true }); await page.waitForTimeout(500); }
-  const panelText = () => page.evaluate(() => document.body.innerText);
-  for (let i = 0; i < 10 && !(await panelText()).includes('提醒服务已连接'); i++) await page.waitForTimeout(2000);
-  text = await panelText();
-  assert.equal(text.includes('提醒服务已连接'), true, '浏览器必须已连上宿主订阅');
+  const panel = page.getByRole('group', { name: '任务状态提醒设置', exact: true });
+  await panel.waitFor({ state: 'visible' });
+  await panel.getByText('权限及运行信息', { exact: true }).click();
+  await panel.getByText('提醒服务已连接', { exact: true }).waitFor({ state: 'visible' });
   result.ui.settingsItem = true;
   result.ui.transport = '提醒服务已连接';
   result.ui.permission = await page.evaluate(() => Notification.permission);
+  if (result.ui.permission !== 'granted') result.limits.push('桌面通知权限未获准；本次只能验证声音输出。');
   pass('设置“常规”入口出现且订阅已连接');
-  // 声音默认已勾选，解锁入口只在“已开启但未解锁”时出现；否则用试听按钮产生同样的用户手势。
-  if (await page.getByRole('button', { name: /点击解锁声音/ }).count()) await click(/点击解锁声音/);
-  else if (await page.getByRole('button', { name: '试听' }).count()) await click(/^试听$/);
-  await page.waitForTimeout(1200);
-  text = await panelText();
-  result.ui.soundUnlocked = text.includes('声音已解锁');
-  assert.equal(result.ui.soundUnlocked, true, '点击后必须真正解锁声音');
+  await panel.getByRole('checkbox', { name: '播放声音', exact: true }).check();
+  const unlock = panel.getByRole('button', { name: /^点击解锁声音/ });
+  if (await unlock.count()) await unlock.click();
+  await panel.getByText('声音已解锁', { exact: true }).waitFor({ state: 'visible' });
+  result.ui.soundUnlocked = true;
   pass('声音已解锁，浏览器具备输出能力');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(800);
 
-  // 3. 选择验收工作区并打开会话。
-  if (!(await page.getByText('workspace', { exact: true }).count())) {
-    await click(/Choose workspace/);
-    await page.getByRole('button', { name: 'Edit path' }).click({ force: true });
-    await page.waitForTimeout(500);
-    const input = page.locator('[role="dialog"] input').last();
-    await input.fill(workspace);
-    await input.press('Enter');
-    await page.waitForTimeout(1000);
-    await click(/^Open$/);
-    await page.waitForTimeout(2500);
-  } else {
-    await page.getByText('workspace', { exact: true }).first().click({ force: true });
-    await page.waitForTimeout(3000);
-  }
+  // 3. 每次按指定路径选择验收工作区，不依赖工作区名称或上次选择。
+  const addWorkspace = page.getByRole('button', { name: 'Add workspace', exact: true });
+  if (await addWorkspace.count()) await addWorkspace.click();
+  else await page.getByRole('button', { name: 'Choose workspace', exact: true }).click();
+  const picker = page.getByRole('dialog').filter({ has: page.getByText('Select Workspace Directory', { exact: true }) });
+  await picker.getByRole('button', { name: 'Edit path', exact: true }).click();
+  const input = picker.locator('input').last();
+  await input.fill(workspace);
+  await input.press('Enter');
+  await page.waitForTimeout(1000);
+  await picker.getByRole('button', { name: 'Open', exact: true }).click();
+  await picker.waitFor({ state: 'hidden' });
 
-  // 4. 会话头部铃铛只在头部进入非空状态后渲染；头部为空白时先用一次预热回合产生内容。
+  // 4. 一个回合同时验证非空会话的铃铛入口和事件投递。计数必须在发送前取得。
   const bell = page.locator('summary[aria-label="任务状态提醒"]');
-  if (!(await bell.count()) && withTurn) { await send(); await page.waitForTimeout(9000); }
+  const before = withTurn ? await page.evaluate(() => window.__acceptance) : null;
+  if (withTurn) {
+    await send();
+    await bell.waitFor({ state: 'visible' });
+  }
   if (await bell.count()) {
     result.ui.sessionHeaderItem = true;
     pass('会话头部铃铛入口出现');
@@ -137,8 +131,6 @@ try {
 
   // 5. 真实宿主事件到浏览器的投递。浏览器必须已就绪，否则按设计丢弃。
   if (withTurn) {
-    const before = await page.evaluate(() => window.__acceptance);
-    await send();
     for (let i = 0; i < 10; i++) {
       await page.waitForTimeout(2500);
       const now = await page.evaluate(() => window.__acceptance);
