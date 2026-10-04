@@ -38,6 +38,8 @@ Cordis 注册的监听和依赖由框架回收。手工定时器、等待请求�
 
 这个约束来自 Cordis 的可撤销副作用模型。`unref()` 只控制进程退出；它不能代替资源释放。
 
+发送通知和撤销回执共用一个锁取消信号。卸载时，浏览器取消排队中的 Web Locks 请求。投递和轮询随即结束等待。发送回调也会检查卸载状态。
+
 ## 传输协议
 
 公开路由是共享 `/api` 通道上的精确 Fetch 路由 `/api/state-notifier`，请求方法为 POST。客户端调用 `ctx.connection.rpc.call('/api', 'state-notifier', request, signal)`。宿主使用 `ctx.connection.fetch.register({ path, methods: ['POST'], requestBody: 'buffered', fetch })`。官方 Connection 负责 Host/Origin 检查、浏览器认证、请求关联与取消。插件不注册裸 HTTP 写接口。

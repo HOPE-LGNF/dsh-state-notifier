@@ -75,11 +75,27 @@ try {
   await b.waitForFunction(() => notifier.snapshot().preferences.enabled === true);
   await b.evaluate(n => notifier.deliver(n), { ...notice, id: 'smoke:reenabled' });
   assert.equal(await b.evaluate(() => JSON.parse(localStorage.getItem('dsh-state-notifier.receipts.v1')).length), 7);
+  // 另一标签页持续持锁。卸载必须取消真实排队请求，不能等持锁方退出。
+  await b.evaluate(() => {
+    window.heldLock = navigator.locks.request('dsh-state-notifier.delivery.v1', () => new Promise(resolve => {
+      window.releaseHeldLock = resolve;
+    }));
+  });
+  await b.waitForFunction(() => !!window.releaseHeldLock);
+  await a.evaluate(n => {
+    window.deliverySettled = false;
+    void notifier.deliver(n).then(() => { window.deliverySettled = true; });
+  }, { ...notice, id: 'smoke:cancelled-lock' });
+  await a.waitForFunction(async () => (await navigator.locks.query()).pending.some(lock => lock.name === 'dsh-state-notifier.delivery.v1'));
+  await a.evaluate(() => notifier.dispose());
+  await a.waitForFunction(() => window.deliverySettled);
+  assert.equal(await a.evaluate(() => JSON.parse(localStorage.getItem('dsh-state-notifier.receipts.v1')).length), 7);
+  await b.evaluate(() => { window.releaseHeldLock(); return window.heldLock; });
   await Promise.all([a, b].map(tab => tab.evaluate(() => notifier.dispose())));
   assert.equal(await a.evaluate(() => notifier.browserReady()), false);
   await a.evaluate(n => notifier.deliver(n), { ...notice, id: 'smoke:disposed' });
   assert.equal(await a.evaluate(() => JSON.parse(localStorage.getItem('dsh-state-notifier.receipts.v1')).length), 7);
-  result = { ok: true, browser: await browser.version(), userAgent: await a.evaluate(() => navigator.userAgent), simultaneousTabs: 2, duplicateNativeConstructions: 1, testedKinds: Object.keys(tones), successfulReceipts: 7, permission: '测试上下文显式授予', evidence: '浏览器 API 接受输出、Web Locks 去重、storage 同步、手势解锁与卸载；不证明系统弹窗或声音可听' };
+  result = { ok: true, browser: await browser.version(), userAgent: await a.evaluate(() => navigator.userAgent), simultaneousTabs: 2, duplicateNativeConstructions: 1, cancelledQueuedLocks: 1, testedKinds: Object.keys(tones), successfulReceipts: 7, permission: '测试上下文显式授予', evidence: '浏览器 API 接受输出、Web Locks 去重与排队取消、storage 同步、手势解锁与卸载；不证明系统弹窗或声音可听' };
   console.log(JSON.stringify(result, null, 2));
 } finally {
   await browser?.close();

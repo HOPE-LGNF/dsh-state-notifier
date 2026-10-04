@@ -80,6 +80,7 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
   const nodes = new Set();
   const notifications = new Set();
   const locks = env.navigator?.locks;
+  const lockLifetime = new AbortController();
   function read(key, fallback) {
     try { return JSON.parse(env.localStorage.getItem(key) || 'null') ?? fallback; }
     catch { storageAvailable = false; return fallback; }
@@ -274,7 +275,7 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
           }
           publish();
         };
-        if (locks) void locks.request(DELIVERY_LOCK, revoke).catch(() => { if (!disposed) { storageAvailable = false; publish(); } });
+        if (locks) void locks.request(DELIVERY_LOCK, { signal: lockLifetime.signal }, revoke).catch(() => { if (!disposed) { storageAvailable = false; publish(); } });
         else revoke();
         publish();
       };
@@ -307,7 +308,7 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
       }
     };
     try {
-      if (locks) await locks.request(DELIVERY_LOCK, send);
+      if (locks) await locks.request(DELIVERY_LOCK, { signal: lockLifetime.signal }, send);
       else send();
     } catch { if (!disposed) { transport = '多标签页提醒协调失败'; publish(); } }
   }
@@ -328,6 +329,7 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
     dispose() {
       if (disposed) return;
       disposed = true;
+      lockLifetime.abort();
       listeners.clear();
       env.removeEventListener?.('storage', onStorage);
       env.removeEventListener?.('focus', onFocus);
