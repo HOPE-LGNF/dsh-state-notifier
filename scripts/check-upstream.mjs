@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { testIsolationArgs } from './test-options.mjs';
 
 // 只替换被插件消费的 Session 实现。它不代表完整 master 应用验收。
 const upstream = process.argv[2];
@@ -12,7 +13,7 @@ const directory = await mkdtemp(resolve('.upstream-check-'));
 try {
   const output = join(directory, 'session.mjs');
   await build({ entryPoints: [entry], outfile: output, bundle: true, packages: 'external', platform: 'node', format: 'esm', target: 'node22' });
-  const result = spawnSync(process.execPath, ['--test', '--test-isolation=none', 'test/integration.test.js'], {
+  const result = spawnSync(process.execPath, ['--test', ...testIsolationArgs(), 'test/integration.test.js'], {
     env: { ...process.env, DSH_SESSION_SOURCE: output }, stdio: 'inherit',
   });
   if (result.error) throw result.error;
