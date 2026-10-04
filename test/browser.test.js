@@ -36,7 +36,36 @@ function harness({ storage = new Map(), locks, permission = 'granted', resume, r
 }
 function serializedLocks() {
   let tail = Promise.resolve();
-  return { request(_key, action) { const result = tail.then(action); tail = result.catch(() => {}); return result; } };
+  return { request(_key, options, action = options) {
+    const result = tail.then(() => { options?.signal?.throwIfAborted(); return action(); });
+    tail = result.catch(() => {}); return result;
+  } };
+}
+
+function heldLocks(held = true) {
+  const gate = deferred();
+  const signals = [];
+  let pending = 0;
+  return {
+    signals, pending: () => pending, hold() { held = true; }, release: gate.resolve,
+    request(_name, options, action = options) {
+      const signal = options?.signal;
+      signals.push(signal);
+      if (!held) return Promise.resolve().then(action);
+      pending++;
+      return new Promise((resolve, reject) => {
+        let finished = false;
+        const finish = () => {
+          if (finished) return false;
+          finished = true; pending--; signal?.removeEventListener('abort', abort); return true;
+        };
+        const abort = () => { if (finish()) reject(signal.reason); };
+        signal?.addEventListener('abort', abort, { once: true });
+        if (signal?.aborted) abort();
+        gate.promise.then(() => { if (finish()) resolve(action()); });
+      });
+    },
+  };
 }
 
 test('settings take effect immediately and storage changes synchronize preferences', async () => {
@@ -156,13 +185,62 @@ test('changing sound preference while resume is pending stays off', async () => 
 
 test('settings are rechecked after awaiting a tab lock', async () => {
   const gate = deferred();
-  const h = harness({ locks: { async request(_key, action) { await gate.promise; return action(); } } });
+  const h = harness({ locks: { async request(_key, options, action = options) { await gate.promise; return action(); } } });
   const n = createBrowserNotifier(h.env);
   const delivery = n.deliver(event);
   n.update({ enabled: false }); gate.resolve(); await delivery;
   assert.equal(h.shown.length, 0);
   assert.equal(h.storage.has(RECEIPTS_KEY), false);
   n.dispose();
+});
+
+test('卸载取消排队锁，不释放对方锁也能结束投递和轮询', async () => {
+  const locks = heldLocks();
+  const h = harness({ locks });
+  const n = createBrowserNotifier(h.env);
+  const delivery = n.deliver(event);
+  const rpc = { call: async () => ({ ok: true, value: {
+    epoch: 'epoch', cursor: 1, reset: false, playback: 'browser', notices: [event],
+  } }) };
+  const polling = startPolling(rpc, n, h.env);
+  const done = Promise.all([delivery, polling.done]);
+  let settled = false;
+  done.then(() => { settled = true; });
+  try {
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(locks.pending(), 2);
+    polling.dispose(); n.dispose(); n.dispose();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(locks.pending(), 0, '卸载须取消排队请求');
+    assert.equal(settled, true, '不得等待另一标签页释放锁');
+    assert.equal(locks.signals[0], locks.signals[1]);
+    assert.equal(locks.signals[0].aborted, true);
+    assert.equal(h.shown.length, 0);
+    assert.equal(h.storage.has(RECEIPTS_KEY), false);
+  } finally {
+    polling.dispose(); n.dispose(); locks.release(); await done;
+  }
+});
+
+test('卸载同时取消排队的通知回执撤销，迟到回调不改存储', async () => {
+  const locks = heldLocks(false);
+  const h = harness({ locks });
+  const n = createBrowserNotifier(h.env);
+  await n.deliver(event);
+  const before = h.storage.get(RECEIPTS_KEY);
+  locks.hold(); h.shown[0].onerror();
+  try {
+    assert.equal(locks.pending(), 1);
+    n.dispose();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(locks.pending(), 0);
+    assert.equal(locks.signals[0], locks.signals[1]);
+    assert.equal(locks.signals[1].aborted, true);
+  } finally {
+    n.dispose(); locks.release();
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(h.storage.get(RECEIPTS_KEY), before);
 });
 
 test('unsupported APIs and denied/insecure permission are visible without automatic prompts', () => {
@@ -192,7 +270,7 @@ test('successful receipts stay bounded at 256 and clicking uses supplied navigat
 test('different events share the ledger lock, retaining both tabs receipts', async () => {
   const storage = new Map(), names = [];
   const serial = serializedLocks();
-  const locks = { request(name, fn) { names.push(name); return serial.request(name, fn); } };
+  const locks = { request(name, ...args) { names.push(name); return serial.request(name, ...args); } };
   const a = harness({ storage, locks }), b = harness({ storage, locks });
   const na = createBrowserNotifier(a.env), nb = createBrowserNotifier(b.env);
   await Promise.all([na.deliver(event), nb.deliver({ ...event, id: 'epoch:2' })]);
