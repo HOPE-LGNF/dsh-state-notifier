@@ -21,14 +21,14 @@ npm run check
 需要离线交接包时，在干净工作树运行 `node scripts/export.mjs`。它生成 `artifacts/dsh-state-notifier-<版本>.bundle` 与同名 `.sha256`，并克隆恢复比对 HEAD。先校验 SHA-256，再恢复：
 
 ```bash
-git clone artifacts/dsh-state-notifier-0.2.0.bundle dsh-state-notifier
+git clone artifacts/dsh-state-notifier-0.3.0.bundle dsh-state-notifier
 cd dsh-state-notifier
 git fsck --full
 npm ci
 npm run check
 ```
 
-仓库自带的 `LICENSE` 是 MIT。`v0.2.0` 由维护者 `HOPE-LGNF` 创建；公开远端、名称、许可与署名由该维护者确认。
+仓库自带的 `LICENSE` 是 MIT。`v0.3.0` 由维护者 `HOPE-LGNF` 创建；公开远端、名称、许可与署名由该维护者确认。
 
 ## 日常验证
 
@@ -79,7 +79,7 @@ Windows 人工验收还要检查通知中心、系统免打扰和实际声音。
 - 发布前检查 diff、运行验证、确定 SemVer，再更新 CHANGELOG。
 - tag 为 `vX.Y.Z`。使用 annotated tag。已发布 tag 永不移动。
 - GitHub Release 使用同一个 tag，正文取自 CHANGELOG 对应版本。
-- 当前状态：`main` 与 annotated tag `v0.2.0` 已推送到公开仓库；**npm 未发布**，也没有创建 GitHub Release。`v0.1.0` 只存在于本地，未推送：它指向的交接快照仍在用已修复的 `connection.rpc.handle`。
+- 当前状态：`main`、annotated tag `v0.3.0` 与 GitHub Release `v0.3.0` 已推送到公开仓库；npm 发布见其 Release 说明。`v0.1.0` 只存在于本地，未推送：它指向的交接快照仍在用已修复的 `connection.rpc.handle`。
 
 后续发布示例：
 
