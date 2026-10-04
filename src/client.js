@@ -80,6 +80,8 @@ export function apply(ctx) {
           p.icon === CUSTOM_ICON && h('button', { type: 'button', onClick: () => notifier.update({ icon: ICON_CHOICES[0], iconData: '' }) }, '清除自定义图标'),
           iconError && h('div', { role: 'alert', style: { color: 'var(--dsw-alias-label-error, #c00)' } }, iconError))),
         toggle('title', '通知中显示会话标题（默认只显示会话短标识）', p.showSessionTitle, value => notifier.update({ showSessionTitle: value })),
+        toggle('question', '显示提问的问题（默认开启）', p.showQuestion, value => notifier.update({ showQuestion: value })),
+        h('small', { key: 'question-note' }, '关闭后，提问正文不会随订阅发给浏览器，通知只显示分类与会话标识。'),
       ]),
       collapsible('runtime', '权限及运行信息', [
         ...[state.soundStatus, state.desktopStatus, state.storageStatus, state.tabStatus, state.transport, state.resetMessage, state.navigationError]

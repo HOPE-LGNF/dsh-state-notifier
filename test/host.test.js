@@ -326,3 +326,20 @@ test('Host 配置：显式默认值生效，不合并旧 bell 运行时文件', 
   assert.equal((await within(h.call(request()))).value.playback, 'auto');
   assert.deepEqual(h.warnings, []);
 });
+
+test('Host：真实 Session 的提问正文只按客户端请求返回', async t => {
+  const h = await boot();
+  t.after(() => h.stop());
+  const baseline = await within(h.call(request()));
+  const cursor = cursorOf(baseline.value);
+  h.session.append('tool/call', {
+    turn: 1, step: 1, callId: 'question-real', name: 'ask_user_question',
+    arguments: JSON.stringify({ questions: [{ id: 'db', header: '数据库', question: '选 MySQL 还是 Postgres？' }] }),
+  });
+  const off = await within(h.call({ ...request(cursor), content: false }));
+  assert.equal(off.value.notices[0].kind, 'question');
+  assert.equal('question' in off.value.notices[0], false, '未请求正文时不能带出提问内容');
+  const on = await within(h.call({ ...request(cursor), content: true }));
+  assert.equal(on.value.notices[0].question, '数据库：选 MySQL 还是 Postgres？');
+  assert.equal(on.value.notices[0].sessionId, h.session.id);
+});

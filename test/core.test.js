@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createNotifier, LABEL_LIMIT, NOTICE_KINDS, STATE_LIMITS } from '../src/core.js';
+import { CONTENT_LIMIT, createNotifier, LABEL_LIMIT, NOTICE_KINDS, STATE_LIMITS } from '../src/core.js';
 
 const mainSession = (id = 'main', header = {}) => ({ id, header });
 const text = value => ({ type: 'text', text: value });
@@ -389,4 +389,37 @@ test('宿主提供的会话名进入通知，缺失或异常时不写入字段',
   assert.equal(label.startsWith('第一行'), true);
   assert.equal(label.includes('\u0000'), false);
   assert.equal(label.length <= LABEL_LIMIT, true);
+});
+
+test('提问通知带出问题正文，解析失败或非提问工具时不留字段', () => {
+  const h = harness();
+  const session = mainSession();
+  const args = JSON.stringify({ questions: [
+    { id: 'q1', header: '数据库', question: '选 MySQL 还是 Postgres？' },
+    { id: 'q2', question: '要不要顺便加索引？' },
+  ] });
+  h.send(session, 'tool/call', { turn: 1, step: 1, callId: 'call-1', name: 'ask_user_question', arguments: args });
+  assert.equal(h.notices[0].kind, 'question');
+  assert.equal(h.notices[0].question, '数据库：选 MySQL 还是 Postgres？\n要不要顺便加索引？');
+
+  const broken = harness();
+  broken.send(mainSession(), 'tool/call', { turn: 1, step: 1, callId: 'call-2', name: 'ask_user_question', arguments: '{不是 JSON' });
+  assert.equal(broken.notices[0].kind, 'question');
+  assert.equal('question' in broken.notices[0], false, '解析失败不能写入正文');
+
+  const other = harness();
+  other.send(mainSession(), 'tool/call', { turn: 1, step: 1, callId: 'call-3', name: 'bash', arguments: '{"command":"ls"}' });
+  assert.equal(other.notices.length, 0, '非提问工具不通知');
+});
+
+test('提问正文被压成有界文本：控制字符清理、长度截断、问题数量受限', () => {
+  const h = harness();
+  const long = 'x'.repeat(500);
+  const questions = [1, 2, 3, 4, 5].map(index => ({ id: `q${index}`, question: index === 1 ? `第一行\u0000\u001b[31m${long}` : `问题${index}` }));
+  h.send(mainSession(), 'tool/call', { turn: 1, step: 1, callId: 'call-long', name: 'ask_user_question', arguments: JSON.stringify({ questions }) });
+  const text = h.notices[0].question;
+  assert.equal(text.length <= CONTENT_LIMIT, true);
+  assert.equal(text.includes('\u0000'), false);
+  assert.equal(text.startsWith('第一行'), true);
+  assert.equal(text.includes('问题4'), false, '只带出前几道问题');
 });

@@ -9,9 +9,12 @@ export function createJournal({ capacity = 256, pollMs = 25_000, now = Date.now 
   let seq = 0;
   let closed = false;
 
-  const read = (cursor) => {
+  // 提问正文只在客户端显式请求时才随响应返回；关闭该功能后正文不会离开宿主。
+  const withoutContent = ({ question, ...rest }) => rest;
+  const read = (cursor, withContent) => {
     const reset = cursor !== null && (cursor.epoch !== epoch || cursor.seq > seq || cursor.seq < (notices[0]?.seq ?? seq + 1) - 1);
-    return { epoch, cursor: seq, reset, notices: cursor === null || reset ? [] : notices.filter(n => n.seq > cursor.seq) };
+    const list = cursor === null || reset ? [] : notices.filter(n => n.seq > cursor.seq);
+    return { epoch, cursor: seq, reset, notices: withContent ? list : list.map(withoutContent) };
   };
   const prune = () => {
     for (const [id, client] of clients) if (now() - client.time > 35_000) clients.delete(id);
@@ -32,6 +35,7 @@ export function createJournal({ capacity = 256, pollMs = 25_000, now = Date.now 
       if (!request || typeof request !== 'object' || Array.isArray(request)
         || typeof request.clientId !== 'string' || !/^[\w-]{1,80}$/.test(request.clientId)
         || typeof request.browserReady !== 'boolean'
+        || (request.content !== undefined && typeof request.content !== 'boolean')
         || !(request.cursor === null || (request.cursor && typeof request.cursor.epoch === 'string'
           && request.cursor.epoch.length <= 80 && Number.isSafeInteger(request.cursor.seq) && request.cursor.seq >= 0))) {
         throw new TypeError('通知订阅参数无效');
@@ -42,7 +46,8 @@ export function createJournal({ capacity = 256, pollMs = 25_000, now = Date.now 
       // 相同客户端的新请求唤醒旧请求，避免同一页面积累长轮询。
       waiters.get(request.clientId)?.();
       clients.set(request.clientId, { ready: request.browserReady, time: now() });
-      const result = read(request.cursor);
+      const withContent = request.content === true;
+      const result = read(request.cursor, withContent);
       if (request.cursor === null || result.reset || result.notices.length) return result;
       await new Promise((resolve, reject) => {
         let timer;
@@ -60,7 +65,7 @@ export function createJournal({ capacity = 256, pollMs = 25_000, now = Date.now 
       });
       signal.throwIfAborted();
       if (closed) throw new Error('通知插件已卸载');
-      return read(request.cursor);
+      return read(request.cursor, withContent);
     },
     dispose() {
       closed = true;

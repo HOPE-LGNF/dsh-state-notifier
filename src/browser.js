@@ -17,7 +17,7 @@ const ICON_PATTERN = /^data:image\/(?:png|jpeg|webp|gif|svg\+xml);base64,([A-Za-
 const DEFAULT_SOUND = 'default';
 export const DEFAULTS = Object.freeze({
   enabled: true, sound: true, desktop: true, volume: 0.5, quietWhenFocused: false,
-  showSessionTitle: false,
+  showSessionTitle: false, showQuestion: true,
   sounds: Object.freeze(Object.fromEntries(Object.keys(LABELS).map(kind => [kind, DEFAULT_SOUND]))),
   icon: ICON_CHOICES[0], iconData: '',
 });
@@ -47,7 +47,7 @@ export function shortSessionId(id) {
 function preferences(value) {
   const result = { ...DEFAULTS, sounds: { ...DEFAULTS.sounds } };
   if (!value || typeof value !== 'object') return result;
-  for (const key of ['enabled', 'sound', 'desktop', 'quietWhenFocused', 'showSessionTitle']) {
+  for (const key of ['enabled', 'sound', 'desktop', 'quietWhenFocused', 'showSessionTitle', 'showQuestion']) {
     if (typeof value[key] === 'boolean') result[key] = value[key];
   }
   if (typeof value.volume === 'number' && Number.isFinite(value.volume)) result.volume = Math.max(0, Math.min(1, value.volume));
@@ -102,6 +102,11 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
   const iconUrl = () => (prefs.icon === CUSTOM_ICON && validIconData(prefs.iconData) ? prefs.iconData : '');
   const displayLabel = notice => (prefs.showSessionTitle && typeof notice?.sessionLabel === 'string' && notice.sessionLabel
     ? notice.sessionLabel : shortSessionId(notice?.sessionId));
+  // 通知正文：会话标识一行，提问内容按官方问题文本多行显示。
+  const displayBody = notice => {
+    const head = `会话 ${displayLabel(notice)}`;
+    return prefs.showQuestion && typeof notice?.question === 'string' && notice.question ? `${head}\n${notice.question}` : head;
+  };
   function snapshot() {
     return {
       preferences: { ...prefs, sounds: { ...prefs.sounds } },
@@ -240,7 +245,7 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
     try {
       const icon = iconUrl();
       const notification = new env.Notification(`DeepSeek：${LABELS[notice.kind]}`, {
-        body: `会话 ${displayLabel(notice)}`, tag: `dsh-state-notifier:${notice.id}`, silent: true,
+        body: displayBody(notice), tag: `dsh-state-notifier:${notice.id}`, silent: true,
         ...(icon ? { icon, badge: icon } : {}),
       });
       if (notifications.size >= 32) {
@@ -316,6 +321,8 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
   return {
     snapshot, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     update, unlockSound, enableSound, requestPermission, deliver, browserReady, setIcon,
+    /** 是否请求宿主在通知里附带提问正文。 */
+    wantsContent() { return prefs.showQuestion; },
     setTransport(message) { transport = message; publish(); },
     setHostState(mode, reset) { playback = mode; resetMessage = reset ? '提醒记录已重置；断线期间的部分提醒可能已超出保留范围' : ''; publish(); },
     dispose() {
@@ -346,10 +353,15 @@ export function startPolling(rpc, notifier, env = globalThis) {
   let cursor = null;
   let retry = 500;
   let ready = notifier.browserReady();
+  let content = notifier.wantsContent();
   const clientId = env.crypto?.randomUUID?.() || `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const unsubscribe = notifier.subscribe(() => {
-    const next = notifier.browserReady();
-    if (next !== ready) { ready = next; pending?.abort(); wake?.(); }
+    const nextReady = notifier.browserReady();
+    const nextContent = notifier.wantsContent();
+    // 正文开关变化也要重启订阅，否则旧请求仍按旧约定取内容。
+    if (nextReady !== ready || nextContent !== content) {
+      ready = nextReady; content = nextContent; pending?.abort(); wake?.();
+    }
   });
   const delay = ms => new Promise(resolve => {
     wake = () => { env.clearTimeout(timer); wake = undefined; resolve(); };
@@ -359,7 +371,7 @@ export function startPolling(rpc, notifier, env = globalThis) {
     while (!stopped) {
       pending = new AbortController();
       try {
-        const result = await rpc.call('/api', 'state-notifier', { cursor, clientId, browserReady: notifier.browserReady() }, pending.signal);
+        const result = await rpc.call('/api', 'state-notifier', { cursor, clientId, browserReady: notifier.browserReady(), content: notifier.wantsContent() }, pending.signal);
         if (stopped) break;
         if (pending.signal.aborted) continue;
         const value = result?.ok && result.value;

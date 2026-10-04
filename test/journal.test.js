@@ -51,3 +51,24 @@ test('浏览器就绪租约会过期，输入和客户端数量有界', async ()
   assert.equal(j.hasBrowser(), false);
   j.dispose();
 });
+
+test('提问正文只在客户端请求时返回，重复游标同样遵守该约定', async () => {
+  const j = createJournal({ pollMs: 10 });
+  const signal = new AbortController().signal;
+  j.publish({ id: 'x', kind: 'question', sessionId: 's', question: '选哪个？', time: 1 });
+  const base = await j.poll({ clientId: 'tab-a', browserReady: true, cursor: null }, signal);
+  const cursor = { epoch: base.epoch, seq: base.cursor - 1 };
+  const stripped = await j.poll({ clientId: 'tab-a', browserReady: true, cursor }, signal);
+  assert.equal(stripped.notices[0].kind, 'question');
+  assert.equal('question' in stripped.notices[0], false, '未请求正文时不能带出');
+  const withContent = await j.poll({ clientId: 'tab-a', browserReady: true, cursor, content: true }, signal);
+  assert.equal(withContent.notices[0].question, '选哪个？');
+  j.dispose();
+});
+
+test('非布尔的 content 参数被拒绝', async () => {
+  const j = createJournal({ pollMs: 10 });
+  const signal = new AbortController().signal;
+  await assert.rejects(() => j.poll({ clientId: 'tab-a', browserReady: true, cursor: null, content: 'yes' }, signal), TypeError);
+  j.dispose();
+});

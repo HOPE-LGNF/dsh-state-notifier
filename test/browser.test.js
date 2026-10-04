@@ -321,3 +321,40 @@ test('自定义图标进入原生通知，内置图标不伪造 icon', async () 
   assert.equal(h.shown[1].options.icon, png);
   n.dispose();
 });
+
+test('提问正文默认进入通知正文，关闭后不再请求也不再显示', async () => {
+  const h = harness();
+  const n = createBrowserNotifier(h.env);
+  await n.enableSound();
+  const notice = { ...event, id: 'q:1', kind: 'question', sessionId: 'session-2fcae467-71ee', question: '选 MySQL 还是 Postgres？' };
+  assert.equal(n.wantsContent(), true, '默认开启');
+  await n.deliver(notice);
+  assert.equal(h.shown[0].options.body, '会话 2fcae467\n选 MySQL 还是 Postgres？');
+  n.update({ showQuestion: false });
+  assert.equal(n.wantsContent(), false);
+  await n.deliver({ ...notice, id: 'q:2' });
+  assert.equal(h.shown[1].options.body, '会话 2fcae467', '关闭后只显示会话标识');
+  await n.deliver({ ...notice, id: 'q:3', question: undefined });
+  assert.equal(h.shown[2].options.body, '会话 2fcae467', '没有正文时不追加空行');
+  n.dispose();
+});
+
+test('正文开关变化会重启订阅并按新约定请求', async () => {
+  const h = harness();
+  const n = createBrowserNotifier(h.env);
+  const calls = [];
+  const rpc = { call(_channel, _endpoint, payload, signal) {
+    calls.push({ content: payload.content, cursor: payload.cursor });
+    if (calls.length === 1) return Promise.resolve({ ok: true, value: { epoch: 'epoch', cursor: 0, reset: false, notices: [], playback: 'auto' } });
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('abort')), { once: true }));
+  } };
+  const polling = startPolling(rpc, n, h.env);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls[0].content, true);
+  n.update({ showQuestion: false });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length >= 2, true, '开关变化必须触发新的订阅');
+  assert.equal(calls.at(-1).content, false);
+  assert.deepEqual(calls.at(-1).cursor, { epoch: 'epoch', seq: 0 }, '重订阅沿用游标，不重放历史');
+  polling.dispose(); n.dispose(); await polling.done;
+});

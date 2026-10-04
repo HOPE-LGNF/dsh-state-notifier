@@ -3,12 +3,34 @@ export const NOTICE_KINDS = Object.freeze(['complete', 'approval', 'question', '
 export const STATE_LIMITS = Object.freeze({ sessions: 256, notices: 1024 });
 /** 会话显示名上限，避免把长标题带进浏览器与系统通知。 */
 export const LABEL_LIMIT = 80;
+/** 提问正文上限，以及最多带出几道问题。 */
+export const CONTENT_LIMIT = 200;
+export const CONTENT_QUESTIONS = 3;
 
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isId = value => typeof value === 'string' && value.trim().length > 0;
 const isIndex = value => Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 const isTurn = value => isIndex(value) && value > 0;
 const isTime = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+/** 从 ask_user_question 的原始参数里取出可显示的问题；解析失败返回 undefined。 */
+function questionText(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return undefined; }
+  const items = Array.isArray(parsed?.questions) ? parsed.questions : [];
+  const lines = [];
+  for (const item of items.slice(0, CONTENT_QUESTIONS)) {
+    if (!isRecord(item) || typeof item.question !== 'string') continue;
+    // 单条问题内部压成一行，只有问题之间才保留换行。
+    const text = item.question.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const header = typeof item.header === 'string' ? item.header.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+    lines.push(header ? `${header}：${text}` : text);
+  }
+  const joined = lines.join('\n').trim();
+  return joined ? joined.slice(0, CONTENT_LIMIT) : undefined;
+}
 
 /** 去掉控制字符与首尾空白；空结果不进入通知。 */
 function cleanLabel(value) {
@@ -65,6 +87,8 @@ export function createNotifier({
     const label = labelFor(session);
     return label ? { ...fields, sessionLabel: label } : fields;
   };
+  // 正文只在有内容时写入；是否把它交给浏览器由 journal 按订阅请求决定。
+  const withContent = (fields, text) => (text ? { ...fields, question: text } : fields);
 
   function stateFor(id) {
     let state = sessions.get(id);
@@ -149,7 +173,9 @@ export function createNotifier({
       // 最终文本之后的任何 tool/call 都撤销完成候选，包括提问工具。
       current.final = false;
       if (data.name === 'ask_user_question' && isId(data.callId)) {
-        return emit('question', session.id, [data.callId], withLabel({ turn: data.turn, time: event.time }, session));
+        return emit('question', session.id, [data.callId], withContent(
+          withLabel({ turn: data.turn, time: event.time }, session), questionText(data.arguments),
+        ));
       }
     }
     return null;
