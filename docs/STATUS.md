@@ -48,7 +48,17 @@
 | `dsh-gate-probe-bad` | `0.0.1` | 安装被拒并回滚（`restored package.json, pnpm-lock.yaml, and node_modules`），给出 `plugin allow-version` 豁免命令 |
 | `dsh-gate-probe-good` | `^0.2.0-rc.2` | 正常安装 |
 
-两点边界：**Cordis 不在检查范围内**（过滤器只认 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*`），而 alpha 已把 Cordis 提到 `~4.0.5-alpha.1`，本插件声明的 `~4.0.4` 不会被拦也不会被警告；版本门只挡安装，不校验运行期行为，所以仍需真机验收。
+本插件据此声明 `"@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0"`，并用真实包做了三向验证：
+
+| 运行时 | 期望 | 实测 |
+| --- | --- | --- |
+| `0.1.7-rc.1` | 拒绝 | 拒绝并回滚，报 `Plugin dsh-state-notifier@0.2.0 is incompatible with dsh 0.1.7-rc.1` |
+| `0.2.0-rc.2` | 通过 | 安装成功 |
+| `0.2.1-alpha.1` | 通过 | 安装成功 |
+
+上限写成 `<0.3.0-0` 而不是 `<0.3.0`：因为检查使用 `includePrerelease`，`<0.3.0` 会放行 `0.3.0-alpha.1`，与“只允许已验的 0.2.x”意图相反；`<0.3.0-0` 能排除 0.3.0 的全部预发布。`peerDependenciesMeta` 把它标为 optional 只是阻止 npm 把整个 dsh CLI 装进开发依赖，**不影响版本门**——三向实测里 0.1.7-rc.1 依然被拒。
+
+三点边界：**Cordis 不在检查范围内**（过滤器只认 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*`），而 alpha 已把 Cordis 提到 `~4.0.5-alpha.1`，本插件声明的 `~4.0.4` 不会被拦也不会被警告；版本门只挡安装，不校验运行期行为，所以仍需真机验收；它按 `runtimeVersion` 逐次比对，`0.2.x` 的新预发布会被放行，需要时收紧范围。
 
 ## 本次确认的上游缺陷
 
