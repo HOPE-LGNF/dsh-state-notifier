@@ -8,6 +8,7 @@
 
 - 修复浏览器提醒在 dsh `0.2.0-rc.2` 上完全无法连接的问题。原实现用 `connection.rpc.handle` 注册通道；官方实现会用调用方 Context 读取 `webServer`，晚于 `connection` 加载的插件注册必然失败，错误只进入静默日志。现在改用官方受认证的精确 Fetch 路由 `/api/state-notifier`，信任边界、浏览器认证、请求关联与取消仍由官方 Connection 负责。
 - 系统通知的会话标识不再只显示被截断的 `session-` 前缀，改为真实会话短标识；可在“通知外观”中选择显示会话标题。
+- 测试入口不再写死 Node 24 的 `--test-isolation=none`。Node 22 只有 `--experimental-test-isolation=none`，原脚本会让声明支持的 Node 22 与 CI 直接失败。`npm test` 现在按当前版本选择拼写，并在两者都不支持时退回默认隔离。
 
 ### 新增
 

@@ -35,7 +35,7 @@ npm run check
 npm pack --dry-run
 ```
 
-检查使用 Node 内置测试框架。`--test-isolation=none` 让当前受管环境直接报告全部子用例，避免只报告文件级成功。测试不读取真实会话，也不调用模型。
+检查使用 Node 内置测试框架。`npm test` 走 `scripts/test.mjs`，按当前 Node 支持的拼写选择隔离选项：Node 24 是 `--test-isolation=none`，Node 22 是 `--experimental-test-isolation=none`，两者都没有时退回默认隔离。该选项让受管环境直接报告全部子用例，避免只报告文件级成功。测试不读取真实会话，也不调用模型。手动单跑某个文件时，请用上面列出的旧拼写前先确认自己的 Node 版本。
 
 检查官方新 Git 快照：
 

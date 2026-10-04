@@ -39,7 +39,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test --test-isolation=none test/*.test.js",
+    "test": "node scripts/test.mjs",
     "check": "npm run build && npm test",
     "prepack": "npm run build"
   },

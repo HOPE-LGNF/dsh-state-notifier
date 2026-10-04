@@ -3,7 +3,8 @@
 运行生命周期与故障单元检查：
 
 ```bash
-node --test --test-isolation=none test/browser.test.js
+npm test                      # 全部测试；Node 22 用 --experimental-test-isolation=none
+node --test --test-isolation=none test/browser.test.js   # Node 24 单跑该文件
 ```
 
 运行真实 Chromium 夹具（需要机器已有 Playwright 与 Chrome，无需给插件增加开发依赖）：
@@ -12,10 +13,10 @@ node --test --test-isolation=none test/browser.test.js
 PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node scripts/browser-smoke.mjs
 ```
 
-在批准 `node --test` 的受限执行环境中，也可使用同一脚本的测试入口：
+在批准 `node --test` 的受限执行环境中，也可使用同一脚本的测试入口。注意 Node 22 的隔离选项名是 `--experimental-test-isolation=none`：
 
 ```bash
-PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node --test --test-isolation=none scripts/browser-smoke.mjs
+PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node --test --experimental-test-isolation=none scripts/browser-smoke.mjs
 ```
 
 如项目外的 Node 环境能直接解析 `playwright`，可省略变量。`PLAYWRIGHT_CHANNEL` 默认为 `chrome`，也可以设为已安装的 `msedge`。
