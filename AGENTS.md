@@ -22,5 +22,6 @@
 ## 提交与发布
 
 - 每个提交只表达一个意图，使用 Conventional Commits。用户可感知的变化写入 CHANGELOG 的“未发布”。
+- 测试、验收脚本与兼容检查工具等纯开发基础设施改动留在提交与开发文档中，不写入 CHANGELOG。
 - 版本遵循 SemVer，保持 `package.json` 与锁文件一致。发布使用 annotated tag，已发布 tag 不移动。
 - 没有明确请求时，不推送、不发布、不修改日常 dsh 配置。

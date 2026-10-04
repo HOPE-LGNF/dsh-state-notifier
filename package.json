@@ -1,11 +1,12 @@
 {
   "name": "dsh-state-notifier",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DeepSeek Harness 的完成、审批、提问、受阻和错误通知",
   "type": "module",
   "license": "MIT",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.0-rc.2 <0.3.0-0"
   },
   "main": "src/index.js",
   "exports": {

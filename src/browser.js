@@ -1,4 +1,4 @@
-/** 浏览器输出与本机偏好；原生通知只显示分类和会话标识。 */
+/** 浏览器输出与本机偏好；原生通知含分类与会话标识，可带会话标题与提问正文（均可在面板关闭）。 */
 export const LABELS = Object.freeze({ complete: '任务完成', approval: '等待批准', question: '等待回答', block: '任务受阻', error: '发生错误' });
 /** 按事件类别给出的合成音方案；音色固定，不读取任何宿主文件。 */
 export const SOUND_PRESETS = Object.freeze({
