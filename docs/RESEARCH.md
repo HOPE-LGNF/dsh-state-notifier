@@ -1,6 +1,6 @@
 # 功能与接口调研
 
-调研日期：2026-10-03。兼容目标包括当天 npm `latest` 指向的 `@deepseek-ai/dsh@0.2.0-rc.2`，以及官方 Git master `5badb15`。以下结论来自源码、发布包和浏览器官方资料。实现与验收状态另见项目状态文档。
+调研日期：2026-10-03。兼容目标包括当天 npm `latest` 指向的 `@deepseek-ai/dsh@0.2.0-rc.2`，以及官方 Git master `5badb15`。以下结论来自源码、发布包和浏览器官方资料。当前功能见 [README](../README.md)，已有检查结果见[项目状态](STATUS.md)。
 
 ## 结论
 
@@ -15,14 +15,13 @@
 | 对象 | 本次读取的版本 | 用途 |
 | --- | --- | --- |
 | npm DSH 发布物 | `0.2.0-rc.2` | 当前兼容目标；读取已安装包的生产代码和类型声明 |
-| 官方 master | `5badb15`；CLI 声明 `0.2.1-alpha.1` | 了解最新设计；不能代替发布物兼容验证 |
+| npm DSH alpha | `0.2.1-alpha.1` | 补充兼容目标；运行结果见[项目状态](STATUS.md) |
+| 官方 master | `5badb15009ae1756c3afe0ae0cef1faafc290ccc`；CLI 声明 `0.2.1-alpha.1` | 了解最新设计；不能代替发布物兼容验证 |
 | dsh-notify-bell | `6889435`；`0.12.0` | 五类事件、声音、控制面功能基准 |
 | dsh-ding | `92a862a`；`1.0.2` | 系统通知、点击回到会话、查看时免打扰的参考 |
 | 本地第三方分析报告 | 分析 bell `6889435`；验证 DSH `0.1.7-rc.1` | 缺陷清单；其旧版本验证结果不能直接归到 rc.2 |
 
 `latest` 会变化。维护者必须记录测试时解析出的具体版本。master 在本次调研时已经领先发布版。本文中的路径以仓库相对路径或 npm 包内相对路径表达。[官方 CLI 版本声明](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/apps/cli/package.json)、[bell 版本声明](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/package.json)、[ding 版本声明](https://github.com/CAOGGL/dsh-ding/blob/92a862a/package.json)
-
-两个 ChatGPT 链接最初未返回正文。用户随后在对话中粘贴了版本管理建议和四个插件的对比评审。本文已参考粘贴正文；不声称独立打开了私人会话。版本管理采用清晰提交、SemVer、精简 CHANGELOG、固定 tag 和人工发布。
 
 ## bell 功能基准
 
@@ -38,17 +37,17 @@
 | 后端声音 | Windows/WSL SoundPlayer；Linux 本机播放器；失败可回退 BEL | 第一版只保留 BEL；未移植外部播放器 |
 | 静音 | Web 铃铛开关，立即生效 | 状态可见，设置可保存 |
 | 时长过滤 | 完成通知低于 `minDuration` 时只记日志 | 本实现低于门槛不发通知日志；审批和提问不受阈值影响 |
-| 单事件配置 | 每类事件有开关和声音选择 | 保留独立开关；音色固定，未移植映射配置 |
-| 声音包 | 内置 WAV；自定义 WAV 目录；BEL 配置 | 使用五种合成音，无文件依赖；WAV 未移植 |
+| 单事件配置 | 每类事件有开关和声音选择 | 保留独立开关；声音方案见 [README](../README.md#功能) |
+| 声音包 | 内置 WAV；自定义 WAV 目录；BEL 配置 | 使用浏览器合成音；文件音效范围见 [README](../README.md#行为边界) |
 | UI | 会话头部铃铛、主题适配、中文/英文 | 使用当前官方插槽与中文界面；未提供英文切换 |
 | 日志 | 分类结果、摘要和时长 | 只记录分类及诊断，减少任务正文外露 |
 | 生命周期 | 会话销毁时回收状态 | 插件卸载时也关闭连接、定时器和播放器 |
 
 基准来自 [bell README](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/README.zh.md)、[事件分类](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/src/events.js)、[完成判定](https://github.com/ZYar-er/dsh-notify-bell/blob/6889435/src/turns.js)。这些是功能参考，不是复制其架构的理由。
 
-ding 还提供声音上传、长任务周期提醒、模板、配置导入导出、Windows 通知应用名和协议激活。用户要求融入的是系统通知思路。这些额外功能不应全部进入第一版。最有价值的补充是：通知点击回到对应会话，以及用户正在查看对应会话时减少打扰。[ding README](https://github.com/CAOGGL/dsh-ding/blob/92a862a/README.md)
+ding 还提供声音上传、长任务周期提醒、模板、配置导入导出、Windows 通知应用名和协议激活。本项目采用系统通知和点击返回会话的思路。当前功能范围见 [README](../README.md#行为边界)。[ding README](https://github.com/CAOGGL/dsh-ding/blob/92a862a/README.md)
 
-## 当前官方接口
+## 基线官方接口
 
 以下接口已同时核对 master 源码与 `0.2.0-rc.2` 发布包。发布包的 `lib/types/` 声明可用于后续兼容测试。
 
@@ -84,15 +83,18 @@ ding 还提供声音上传、长任务周期提醒、模板、配置导入导出
 | 独立 RPC channel 的 Host/Origin 检查与浏览器认证 | 存在 | 存在 |
 | Loader Config 与官方设置页面 | 存在 | 存在 |
 | 浏览器 Notifications API | 由浏览器提供 | 由浏览器提供 |
-| 本项目完整运行验证 | rc.2 完整 Web 通过 | 只做源码契约检查 |
 
-矩阵表示读取到的契约兼容。第 80 行的结论来自完整 Web 运行，不是源码核对：接口存在，但对晚于 `connection` 加载的插件必然抛错。master 源码运行需要上游规定的构建环境，本次只读取 `rpc-host.ts` 与 `rpc.ts` 确认 Fetch 路由契约相同。
-
-已增加真实会话集成验证：`test/integration.test.js` 在 npm SessionStore 上通过 6 组测试；通过 `DSH_SESSION_SOURCE` 改用 master 的 `packages/core/session/src/index.ts` 后，同一组 6 个测试也通过。测试覆盖五类通知、重复事件、误报反例、阈值、事件开关及卸载重载。审批和提问事件由真实 Session 提交；goal 与 Agent 错误由 Cordis 载荷夹具派发。此验证不启动模型，也不等于完整 master 应用端到端验证。
-
-master 验证运行命令为 `DSH_SESSION_SOURCE=<master Session index.ts 的绝对路径> node --experimental-transform-types test/integration.test.js`。本次 Node `24.18.0` 在添加 `--test` 后只报告文件级通过，未列出 6 组用例；因此采用直接运行 node:test 文件的方式，并检查输出中实际测试数量。
+矩阵说明基线的接口契约。运行结果与限制见[项目状态](STATUS.md)，Session 检查命令见[开发说明](../README.md#开发)。
 
 证据：npm `@deepseek-ai/dsh-client-connection@0.2.0-rc.2` 的 `lib/types/rpc.d.ts`、`lib/types/rpc-host.d.ts`、`lib/types/client/rpc.d.ts`；[master Host RPC](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts)、[master Client RPC](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/client/rpc.ts)。
+
+### 插件版本门
+
+宿主的 `evaluatePluginCompatibility` 检查插件 `peerDependencies` 中的 `@deepseek-ai/dsh` 和 `@deepseek-ai/dsh-*` 项。它使用 `semver.satisfies(runtimeVersion, range, { includePrerelease: true })` 比对。范围不符时，安装被拒并回滚，宿主提供 `plugin allow-version` 豁免命令。
+
+本插件通过可选的 dsh peer 声明兼容范围，具体值见 [package.json](../package.json)。上限 `<0.3.0-0` 排除 0.3.0 的全部预发布，但范围内的新 0.2.x 预发布仍会放行。`optional` 避免 npm 自动安装整个 dsh CLI，不会绕过宿主版本门。[上游安装检查](https://github.com/HOPE-LGNF/dsh-state-notifier/blob/c91dae5c7a82637d6a61497055df5699298be56f/docs/STATUS.md#版本门的实测结论)
+
+Cordis 不在该检查范围内。alpha 宿主使用 `~4.0.5-alpha.1`，本插件声明 `~4.0.4`，版本门不会因此拦截或警告。版本门只检查安装兼容范围，不保证运行行为。依据见[上游兼容调查](https://github.com/HOPE-LGNF/dsh-state-notifier/blob/fedaec8445eb0e709a1f9228ae7c208d5debe008/docs/STATUS.md#版本门的实测结论)。
 
 ### 完成判定
 
@@ -104,9 +106,9 @@ master 验证运行命令为 `DSH_SESSION_SOURCE=<master Session index.ts 的绝
 
 ### 流与客户端
 
-由 Host 分类事件，然后只向 Client 发送语义通知。本项目选择官方 Connection 的长轮询作为传输：Host 把订阅注册为共享 `/api` 通道上的精确 Fetch 路由 `/api/state-notifier`，Client 使用 `ctx.connection.rpc.call('/api', 'state-notifier', payload, signal)`。每次请求最多等待 25 秒。事件日志使用有界缓存和游标。无需另建 SSE 服务或原生脚本协议。
+宿主分类事件，浏览器接收语义通知。本项目采用官方 Connection 长轮询，协议定义见[架构](ARCHITECTURE.md#传输协议)。
 
-最初选择的是 `ctx.connection.rpc.handle('/state-notifier', handler)`。完整 Web 验收证明该接口对晚加载的插件不可用：rc.2 与 master 的 `register()` 都用调用方 Context 读取 `webServer` 来登记前缀路由（[rc.2 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts) 第 192 行）。Cordis 4 的服务属性读取沿 shadow 起点回溯到提供 `connection` 的 fiber，插件因此抛 `cannot get property "webServer" without inject`；错误只进入静默日志，通道不会注册，浏览器长轮询收到 405。`connection.fetch.register` 不读取其它服务，因此不受该缺陷影响，并同样经过官方信任边界与浏览器认证。
+`connection.rpc.handle` 对晚加载的插件不可用：rc.2 与 master 的 `register()` 都用调用方 Context 读取 `webServer` 来登记前缀路由（[Git 基线实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts) 第 192 行）。Cordis 4 的服务属性读取沿 shadow 起点回溯到提供 `connection` 的 fiber，插件因此抛 `cannot get property "webServer" without inject`；错误只进入静默日志，通道不会注册，浏览器长轮询收到 405。`connection.fetch.register` 不读取其它服务，因此不受该缺陷影响，并同样经过官方信任边界与浏览器认证。
 
 该选择保留官方 Host/Origin 检查、浏览器认证、请求关联和取消信号。它也避免维护手写 Typert manifest，或依赖 SRC 方法参数名称解析。Fetch 路由由官方 carrier 在完成信任与认证检查后调用，请求取消通过 Request 的 AbortSignal 传递。Client caller 没有固定内部超时，插件负责自己的等待时间。[Host RPC 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/rpc-host.ts)、[Client RPC 实现](https://github.com/deepseek-ai/deepseek-harness/blob/5badb15/packages/client/connection/src/client/rpc.ts)
 
@@ -184,13 +186,6 @@ Notifications API 要求安全上下文。本机回环地址通常可作为可�
 
 这些措施覆盖接口、生命周期与竞态风险。不能据此声称浏览器提供严格 exactly-once 通知：程序可能在创建通知后、写入回执前退出，且系统显示状态不受插件完全控制。
 
-## 发布前必须补齐的证据
+## 后续工作
 
-1. 在固定 `0.2.0-rc.2` 上安装包并加载 Host 与 Client。
-2. 通过真实 Session API 覆盖五类事件、误报反例和子代理过滤。
-3. 在两条基线上通过真实 Connection RPC 覆盖取消、卸载、游标缺口、重连和配置热更新。
-4. 在浏览器验证授权、声音解锁、静音、点击回会话和多标签页。
-5. 在 Windows 上验证系统横幅、通知中心和后台页面行为。
-6. 检查 npm tarball、README 致谢、许可、Git 导出和接手说明。
-
-每一项应记录“通过、失败、未验证”与具体运行环境。自动化命令退出成功不能替代 Windows 系统通知的验收。
+当前待办见[项目状态](STATUS.md)，操作方法见[浏览器检查](VALIDATION-browser.md)。
