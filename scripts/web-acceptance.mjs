@@ -87,14 +87,22 @@ try {
   await page.waitForTimeout(2500);
   let text = await page.evaluate(() => document.body.innerText);
   assert.equal(text.includes('任务状态提醒'), true, '设置页必须出现通知面板');
+  // 状态区是默认折叠的 details；不展开时 innerText 读不到内容。
+  const runtime = page.getByText('权限及运行信息', { exact: true }).first();
+  if (await runtime.count()) { await runtime.click({ force: true }); await page.waitForTimeout(500); }
+  const panelText = () => page.evaluate(() => document.body.innerText);
+  for (let i = 0; i < 10 && !(await panelText()).includes('提醒服务已连接'); i++) await page.waitForTimeout(2000);
+  text = await panelText();
   assert.equal(text.includes('提醒服务已连接'), true, '浏览器必须已连上宿主订阅');
   result.ui.settingsItem = true;
   result.ui.transport = '提醒服务已连接';
   result.ui.permission = await page.evaluate(() => Notification.permission);
   pass('设置“常规”入口出现且订阅已连接');
-  await click(/启用 \/ 试听声音/);
-  await page.waitForTimeout(1000);
-  text = await page.evaluate(() => document.body.innerText);
+  // 声音默认已勾选，解锁入口只在“已开启但未解锁”时出现；否则用试听按钮产生同样的用户手势。
+  if (await page.getByRole('button', { name: /点击解锁声音/ }).count()) await click(/点击解锁声音/);
+  else if (await page.getByRole('button', { name: '试听' }).count()) await click(/^试听$/);
+  await page.waitForTimeout(1200);
+  text = await panelText();
   result.ui.soundUnlocked = text.includes('声音已解锁');
   assert.equal(result.ui.soundUnlocked, true, '点击后必须真正解锁声音');
   pass('声音已解锁，浏览器具备输出能力');

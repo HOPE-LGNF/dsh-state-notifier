@@ -19,21 +19,36 @@
 
 | 检查 | 结果 | 边界 |
 | --- | --- | --- |
-| `npm run check` | 99 项通过 | Node 24.21.0 与 Node 22.23.3 本机各跑一次 |
+| `npm run check` | 106 项通过 | Node 24.21.0 与 Node 22.23.3 本机各跑一次 |
 | GitHub Actions | 四个 job 全部通过 | run 37191883594：Node 22/24 × ubuntu/windows，push 触发 |
 | 干净依赖安装和构建测试 | 通过 | 使用锁文件与官方包缓存 |
 | npm rc.2 的真实 Cordis + SessionStore | 6 组通过 | 真实事件提交、观察器和卸载；无模型调用 |
 | master `5badb15` 的真实 Session 源码 | 相同 6 组通过 | 外部依赖仍使用锁定 npm 包；不是完整 master 应用 |
 | npm rc.2 完整 Web 应用 | 通过 | 隔离 `DSH_HOME` 与本机回环端口；未使用日常 profile |
+| npm `0.2.1-alpha.1` 完整 Web 应用 | 通过 | 同一套 `scripts/web-acceptance.mjs`：认证边界、两个入口、订阅连接、声音解锁 |
+| npm `0.2.1-alpha.1` 的测试套件 | 106 项通过 | 临时副本装 dsh-session/dsh-scope `0.2.1-alpha.1` + cordis `4.0.5-alpha.1` |
+| 插件管理器的版本门 | 生效且为硬拦截 | 见下“版本门的实测结论” |
 | 两个 UI 入口 | 通过 | 设置“常规”面板与会话头部铃铛都出现 |
 | 真实宿主事件到浏览器 | 通过 | 缺凭据回合触发真实 `agent/error`；浏览器播放错误音（`soundDelta` 3） |
 | 认证与跨站边界 | 通过 | 未认证 401、跨站 Origin 403、未声明方法 404、非法信封 400 |
 | master 的 Fetch 路由契约 | 源码核对通过 | 只读取 `rpc-host.ts` 与 `rpc.ts`，未在 master 上运行完整应用 |
+| alpha 上的旧 `connection.rpc.handle` 路径 | 仍为 405 | 证明改用 Fetch 路由对 alpha 也是必需的 |
 | Chrome 153 无头浏览器夹具 | 通过 | 实际 AudioContext、Notification、Web Locks 和 storage |
 | 完整 Windows 通知中心验收 | 未完成 | 见 N-09 |
 | `npm pack` | 通过 | 包含宿主源码、浏览器产物、patch 和许可证 |
 
-测试使用虚构会话。没有消费用户的 API 额度，没有推送 GitHub，也没有发布 npm 包。验收使用的隔离目录是工作区外的 `~/.dsh-n08-acceptance`，可随时删除。
+测试使用虚构会话。没有消费用户的 API 额度。验收使用的隔离目录是工作区外的 `~/.dsh-n08-acceptance`（rc.2）与 `~/.dsh-alpha`（alpha），可随时删除。
+
+### 版本门的实测结论
+
+`@deepseek-ai/dsh-app-boot` 的 `evaluatePluginCompatibility` 会检查插件 `peerDependencies` 里名字为 `@deepseek-ai/dsh` 或以 `@deepseek-ai/dsh-` 开头的项，用 `semver.satisfies(runtimeVersion, range, { includePrerelease: true })` 比对。A/B 实测（rc.2 运行时）：
+
+| 探针 | peer 范围 | 结果 |
+| --- | --- | --- |
+| `dsh-gate-probe-bad` | `0.0.1` | 安装被拒并回滚（`restored package.json, pnpm-lock.yaml, and node_modules`），给出 `plugin allow-version` 豁免命令 |
+| `dsh-gate-probe-good` | `^0.2.0-rc.2` | 正常安装 |
+
+两点边界：**Cordis 不在检查范围内**（过滤器只认 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*`），而 alpha 已把 Cordis 提到 `~4.0.5-alpha.1`，本插件声明的 `~4.0.4` 不会被拦也不会被警告；版本门只挡安装，不校验运行期行为，所以仍需真机验收。
 
 ## 本次确认的上游缺陷
 
