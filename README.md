@@ -100,5 +100,3 @@ Windows 通知由 **Windows 上打开 dsh 页面的浏览器**发送。dsh 宿�
 - [CAOGGL/dsh-ding](https://github.com/CAOGGL/dsh-ding)：Windows 系统通知、点击返回会话及静音体验的参考。
 - [Cordis 论文](https://arxiv.org/abs/2608.25512)：可撤销副作用和响应式依赖的设计依据。
 - [esbuild](https://github.com/evanw/esbuild)：把唯一一份浏览器源码构建为 dsh 客户端模块。
-
-用户提供的第三方报告和对比评审用于设计回归用例。未复制上述通知插件的代码或音频资源。
