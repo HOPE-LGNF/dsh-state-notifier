@@ -12,14 +12,15 @@
 | N-04 | 浏览器声音、系统通知、同源标签协调 | 单元测试及 Chrome 151 真实 API 检查 |
 | N-05 | 单一全局配置、本机浏览器偏好 | Config 与 storage 同步测试 |
 | N-06 | 卸载清理与输出故障隔离 | 取消、卸载、迟到 Promise、BEL 与日志故障测试 |
-| N-07 | 中文文档、AGENTS、CI 配置、打包与历史导出 | 本地构建、npm 包检查、bundle 恢复检查 |
+| N-07 | 中文文档、AGENTS、CI 配置、打包与历史导出 | 本地构建、npm 包检查；CI 已在 GitHub 实跑通过 |
 | N-08 | 完整 rc.2 Web 应用启动、两个 UI 入口、真实事件投递、认证边界 | 隔离 `DSH_HOME` 实机运行，见下 |
 
 ## 实际验证范围
 
 | 检查 | 结果 | 边界 |
 | --- | --- | --- |
-| `npm run check` | 93 项通过 | Node 24.21.0；CI 的 Node 22/Windows 矩阵尚未在 GitHub 运行 |
+| `npm run check` | 99 项通过 | Node 24.21.0 与 Node 22.23.3 本机各跑一次 |
+| GitHub Actions | 四个 job 全部通过 | run 37191883594：Node 22/24 × ubuntu/windows，push 触发 |
 | 干净依赖安装和构建测试 | 通过 | 使用锁文件与官方包缓存 |
 | npm rc.2 的真实 Cordis + SessionStore | 6 组通过 | 真实事件提交、观察器和卸载；无模型调用 |
 | master `5badb15` 的真实 Session 源码 | 相同 6 组通过 | 外部依赖仍使用锁定 npm 包；不是完整 master 应用 |
