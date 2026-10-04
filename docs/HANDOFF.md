@@ -8,24 +8,27 @@
 
 ## 恢复完整仓库
 
-交付的 `dsh-state-notifier-0.1.0.bundle` 包含所有本地提交、分支和 tag。它不包含 `node_modules`、临时环境或用户提供的参考文件。
-
-先校验同目录的 SHA-256 文件，再恢复：
+公开仓库是主要来源：
 
 ```bash
-git clone dsh-state-notifier-0.1.0.bundle dsh-state-notifier
+git clone https://github.com/HOPE-LGNF/dsh-state-notifier.git
 cd dsh-state-notifier
-git fsck --full
 git log --oneline --decorate
 npm ci
 npm run check
 ```
 
-也可以解压 `dsh-state-notifier-0.1.0-repository.tar.gz`。该文件已经包含普通 `.git` 目录和相同历史。解压后运行同样的检查。
+需要离线交接包时，在干净工作树运行 `node scripts/export.mjs`。它生成 `artifacts/dsh-state-notifier-<版本>.bundle` 与同名 `.sha256`，并克隆恢复比对 HEAD。先校验 SHA-256，再恢复：
 
-本次受管工作目录的 `.git` 是只读占位目录。开发提交临时存放在工作目录外，再导出为上述文件。这是交付环境限制，不是项目要求。接手后使用普通 Git 仓库即可。不要复制临时 Git 路径或现有 `node_modules` 软链接。
+```bash
+git clone artifacts/dsh-state-notifier-0.2.0.bundle dsh-state-notifier
+cd dsh-state-notifier
+git fsck --full
+npm ci
+npm run check
+```
 
-`git clone` 会把本地 bundle 路径设为 origin。准备连接新仓库时，先移除这个本地 origin，再添加真实远端。公开发布前，由实际维护者确认项目名称、许可、署名和远端地址。
+仓库自带的 `LICENSE` 是 MIT。`v0.2.0` 由维护者 `HOPE-LGNF` 创建；公开远端、名称、许可与署名由该维护者确认。
 
 ## 日常验证
 
@@ -76,16 +79,18 @@ Windows 人工验收还要检查通知中心、系统免打扰和实际声音。
 - 发布前检查 diff、运行验证、确定 SemVer，再更新 CHANGELOG。
 - tag 为 `vX.Y.Z`。使用 annotated tag。已发布 tag 永不移动。
 - GitHub Release 使用同一个 tag，正文取自 CHANGELOG 对应版本。
-- 本次只有本地交接 tag，没有推送、npm 发布或 GitHub Release。
+- 当前状态：`main` 与 annotated tag `v0.2.0` 已推送到公开仓库；**npm 未发布**，也没有创建 GitHub Release。`v0.1.0` 只存在于本地，未推送：它指向的交接快照仍在用已修复的 `connection.rpc.handle`。
 
 后续发布示例：
 
 ```bash
-npm version 0.1.1 --no-git-tag-version
+npm version 0.2.1 --no-git-tag-version
 # 编辑 CHANGELOG，运行检查并检查差异。
 git add package.json package-lock.json CHANGELOG.md
-git commit -m "chore(release): v0.1.1"
-git tag -a v0.1.1 -m "v0.1.1"
+git commit -m "chore(release): v0.2.1"
+git tag -a v0.2.1 -m "v0.2.1"
+git push
+git push origin v0.2.1
 ```
 
 推送、npm 发布和 GitHub Release 由维护者明确执行。当前无需 semantic-release 或 Changesets。

@@ -1,6 +1,6 @@
 # 状态与验收
 
-日期：2026-10-03。交付版本：`0.1.0`。这是可继续维护的本地实现与交接快照，尚未公开发布。
+日期：2026-10-04。版本：`0.2.0`。源码公开在 [GitHub](https://github.com/HOPE-LGNF/dsh-state-notifier)，annotated tag `v0.2.0` 已推送；**npm 未发布**，未创建 GitHub Release。
 
 ## 已完成
 
@@ -57,7 +57,7 @@ N-09 无法由 Linux 无头浏览器结果代替：本机已确认浏览器声�
 cd "$HOME/projects/dsh-state-notifier"          # 换成你本机真实的仓库路径
 npm pack
 export DSH_HOME="$HOME/.dsh-notifier-acceptance"  # 必须是有写权限的真实目录
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.1.0.tgz"
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.2.0.tgz"
 npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open --host 127.0.0.1 --port 7712
 # 用上面打印的 URL 与 token：
 DSH_ACCEPT_TURN=1 \
