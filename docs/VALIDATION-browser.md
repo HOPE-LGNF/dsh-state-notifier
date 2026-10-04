@@ -1,53 +1,57 @@
-# 浏览器提醒验证
+# 浏览器检查
 
-运行生命周期与故障单元检查：
+本页说明运行方法。已有结果与待完成事项见[项目状态](STATUS.md)。脚本需要已安装的 Playwright 和浏览器，不增加插件依赖。
 
-```bash
-npm test                      # 全部测试；Node 22 用 --experimental-test-isolation=none
-node --test --test-isolation=none test/browser.test.js   # Node 24 单跑该文件
-```
+## 浏览器夹具
 
-运行真实 Chromium 夹具（需要机器已有 Playwright 与 Chrome，无需给插件增加开发依赖）：
+在仓库根目录运行：
 
 ```bash
 PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node scripts/browser-smoke.mjs
 ```
 
-在批准 `node --test` 的受限执行环境中，也可使用同一脚本的测试入口。注意 Node 22 的隔离选项名是 `--experimental-test-isolation=none`：
+将模块路径替换为本机路径。环境能直接解析 `playwright` 时，可省略该变量。`PLAYWRIGHT_CHANNEL` 默认为 `chrome`，也可设为已安装的 `msedge`。
+
+脚本使用临时浏览器上下文，结束后关闭浏览器。具体检查项见 [browser-smoke.mjs](../scripts/browser-smoke.mjs)。上下文会显式授予通知权限；API 调用成功不证明系统弹窗可见或声音可听。
+
+## 完整 dsh Web
+
+在仓库根目录打包，并创建隔离目录：
 
 ```bash
-PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node --test --experimental-test-isolation=none scripts/browser-smoke.mjs
+npm pack
+notifier_version="$(node -p 'require("./package.json").version')"
+export DSH_HOME="$(mktemp -d)"
+mkdir -p "$DSH_HOME/workspace"
+printf '工作区：%s\n' "$DSH_HOME/workspace"
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-$notifier_version.tgz"
+npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open --host 127.0.0.1 --port 7712
 ```
 
-如项目外的 Node 环境能直接解析 `playwright`，可省略变量。`PLAYWRIGHT_CHANNEL` 默认为 `chrome`，也可以设为已安装的 `msedge`。
+版本选择见[兼容基线](RESEARCH.md#版本与证据边界)。不要使用日常 profile、凭据或历史会话。
 
-脚本使用全新临时浏览器上下文和 `src/browser.js`，通过 Playwright 请求拦截在内存中提供 localhost 夹具，无需监听端口，结束后关闭浏览器。它验证实际点击后 AudioContext 解锁、五类提醒均有正例、原生 Notification 构造、两个标签页通过 Web Locks 去重、storage 事件同步设置、重新启用和卸载行为。单元检查另外覆盖发送失败不记成功、异步通知错误撤销记录、迟到权限与音频 Promise、通知与记录数量上限、串行长轮询和立即取消。
-
-2026-10-03 本地 Linux Headless Chrome 151.0.7922.173 已通过该脚本，五类均产生声音节点和原生通知构造，两个标签页的同事件仅构造一次通知，最终成功记录 7 条。该次使用 `node --test --test-isolation=none` 入口和临时环境加载模块指定已安装的 Playwright。普通 Node 入口在该受限环境中被 Chromium socket 权限拦截；这属于执行环境限制。
-
-通知权限由测试上下文显式授予；脚本不会自动确认真实权限弹窗。该检查证明浏览器 API 接受输出，不能证明 Windows 系统实际显示通知或扬声器可听。Windows 接收端仍需手动点击启用声音与允许桌面通知，检查五类提醒、通知点击会话切换和窗口前后台行为。
-
-## 完整 dsh Web 验收
-
-连接一个已安装本插件的真实 dsh Web 实例，检查官方插槽、认证边界与真实宿主事件的投递：
+在另一个终端运行以下命令。将 URL 和 token 替换为宿主输出的值。将工作区路径替换为上一步创建的目录，将 Playwright 路径替换为本机路径。
 
 ```bash
 DSH_ACCEPT_TURN=1 \
 DSH_WEB_URL="http://127.0.0.1:7712/?token=…" \
-DSH_ACCEPT_WORKSPACE="$HOME/.dsh-notifier-acceptance/acceptance-workspace" \
+DSH_ACCEPT_WORKSPACE="/tmp/上一步生成的目录/workspace" \
 PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" \
 node scripts/web-acceptance.mjs
 ```
 
-准备步骤与通过标准见 [状态与验收](STATUS.md) 的“复现完整 Web 验收”。脚本用官方 Connection 的未认证/跨站请求检查边界，再通过设置页解锁声音、选择工作区、打开会话，并断言真实事件到达浏览器输出。不设置 `DSH_ACCEPT_TURN=1` 时不会发送提示词。
+`DSH_ACCEPT_TURN=1` 会发送一个回合。在配置模型的隔离环境中，这会调用模型。省略此变量时，不发送回合；缺少的铃铛和投递检查列为未验证。具体检查项见 [web-acceptance.mjs](../scripts/web-acceptance.mjs)。
 
-状态区是默认折叠的 `<details>`，脚本会先展开“权限及运行信息”再读状态；声音解锁只在该状态出现提示按钮时点击，否则用“试听”产生同样的用户手势。改过面板 UI 后必须重跑本脚本，否则断言会因控件改名而失效。
+会话非空后才显示铃铛。完成回合还需达到 `minDuration` 门槛。通知权限未获准时，脚本只能检查声音输出。
 
-2026-10-04 在 npm `0.2.0-rc.2` 与 `0.2.1-alpha.1` 两个基线上用同一脚本通过：认证边界 401/403/404、设置面板、订阅连接（`POST /api/state-notifier` 200）、声音解锁。alpha 上旧的 `/state-notifier/poll` 仍返回 405。
+检查结束后，在宿主终端按 Ctrl+C 停止实例。
 
-2026-10-03 在一次隔离 `DSH_HOME` 的 rc.2 完整 Web 运行中通过：未认证 401、跨站 Origin 403、未声明方法 404；设置“常规”面板与会话头部铃铛都出现；真实 `agent/error` 到达浏览器并播放错误音（`soundDelta` 3）。该实例没有模型凭据，因此那次事件来自失败的回合，不能代替“正常回答 → 任务完成提醒”。
+## Windows 人工检查
 
-两点官方行为会被这些步骤暴露：
+使用 Windows 上的 Edge 或 Chrome 打开隔离宿主。按 [README](../README.md#启用浏览器提醒) 启用声音与系统通知。
 
-- 会话头部在空白状态只渲染 corner 槽，铃铛要等会话非空后才出现。先产生一次真实回合。
-- 无头 Chromium 报告 `Notification.permission = denied`，桌面通知路径会被正确跳过。要验证系统横幅必须在真实桌面浏览器上手工确认。
+1. 分别触发五类通知，确认弹窗可见、声音可听。
+2. 点击通知，确认打开对应会话。
+3. 切换窗口前后台，检查前台静音策略。
+4. 打开第二个同源标签页，检查重复通知。
+5. 开启系统免打扰，检查横幅和通知中心的行为。

@@ -44,7 +44,7 @@ Cordis 注册的监听和依赖由框架回收。手工定时器、等待请求�
 
 公开路由是共享 `/api` 通道上的精确 Fetch 路由 `/api/state-notifier`，请求方法为 POST。客户端调用 `ctx.connection.rpc.call('/api', 'state-notifier', request, signal)`。宿主使用 `ctx.connection.fetch.register({ path, methods: ['POST'], requestBody: 'buffered', fetch })`。官方 Connection 负责 Host/Origin 检查、浏览器认证、请求关联与取消。插件不注册裸 HTTP 写接口。
 
-不使用 `connection.rpc.handle`。rc.2 与 master 的实现都用调用方 Context 读取 `webServer` 登记前缀路由。Cordis 4 的服务属性读取会沿 shadow 起点回溯到提供 `connection` 的 fiber；晚于 `connection` 加载的插件因此抛 `cannot get property "webServer" without inject`。该错误只进入静默日志，通道不会注册，客户端只能收到 405。
+`connection.rpc.handle` 在兼容基线中不支持晚加载的插件，因此使用 Fetch 路由。原因见[接口调研](RESEARCH.md#流与客户端)。
 
 请求含 `clientId`、`browserReady`、`cursor`。游标为空时只取得当前基线。后续游标为 `{ epoch, seq }`。响应含 `epoch`、`cursor`、`reset`、`notices` 和 `playback`。
 
@@ -83,6 +83,6 @@ core 从 `ask_user_question` 的 JSON 参数提取问题。每道问题清除控
 
 ## 兼容策略
 
-先使用两条基线都有的公开 Connection 接口。当前不使用私有字段、手写 Typert manifest 或基于函数参数名的弱解析。
+使用[兼容基线](RESEARCH.md#版本与证据边界)支持的公开 Connection 接口。当前不使用私有字段、手写 Typert manifest 或基于函数参数名的弱解析。
 
 未来若官方提供稳定的通知服务或外部插件的完整 Remote 生成工具，先确认迁移能减少代码，再替换传输层。不要让迁移改变 core 的事件语义。
