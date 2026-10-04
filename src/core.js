@@ -1,12 +1,21 @@
 /** 通知判定只保留状态与标识，不保存提示词、问题、审批理由或错误正文。 */
 export const NOTICE_KINDS = Object.freeze(['complete', 'approval', 'question', 'block', 'error']);
 export const STATE_LIMITS = Object.freeze({ sessions: 256, notices: 1024 });
+/** 会话显示名上限，避免把长标题带进浏览器与系统通知。 */
+export const LABEL_LIMIT = 80;
 
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isId = value => typeof value === 'string' && value.trim().length > 0;
 const isIndex = value => Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 const isTurn = value => isIndex(value) && value > 0;
 const isTime = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+/** 去掉控制字符与首尾空白；空结果不进入通知。 */
+function cleanLabel(value) {
+  if (typeof value !== 'string') return undefined;
+  const text = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+  return text ? text.slice(0, LABEL_LIMIT) : undefined;
+}
 
 function isMainSession(session) {
   if (!isRecord(session) || !isId(session.id)) return false;
@@ -36,6 +45,7 @@ function isFinalText(data) {
  */
 export function createNotifier({
   minDurationMs = 10_000, enabled = true, events = {}, onNotice = () => {}, now = Date.now,
+  resolveLabel = () => undefined,
 } = {}) {
   const minimum = isTime(minDurationMs) ? minDurationMs : 10_000;
   const sessions = new Map();
@@ -46,6 +56,15 @@ export function createNotifier({
   const accepts = session => !disposed && enabled === true
     && isMainSession(session) && !disposedSessions.has(session);
   const allowed = kind => events?.[kind] !== false && events?.[kind]?.enabled !== false;
+  // 会话显示名由宿主注入。解析失败不能影响通知，也不能把异常正文带出去。
+  const labelFor = session => {
+    try { return cleanLabel(resolveLabel(session)); } catch { return undefined; }
+  };
+  // 没有可用名字时不写入字段，通知载荷与之前保持逐字段一致。
+  const withLabel = (fields, session) => {
+    const label = labelFor(session);
+    return label ? { ...fields, sessionLabel: label } : fields;
+  };
 
   function stateFor(id) {
     let state = sessions.get(id);
@@ -100,9 +119,9 @@ export function createNotifier({
       state.seq = seq;
     }
     if (type === 'approval/asked') {
-      return emit('approval', session.id, [data.id], {
+      return emit('approval', session.id, [data.id], withLabel({
         ...(state.current ? { turn: state.current.turn } : {}), time: event.time,
-      });
+      }, session));
     }
     if (type === 'turn/end') {
       if (data.turn <= state.endedTurn) return null;
@@ -113,7 +132,7 @@ export function createNotifier({
         || !isTime(current.startTime) || !isTime(event.time) || event.time < current.startTime) return null;
       const durationMs = event.time - current.startTime;
       if (durationMs < minimum) return null;
-      return emit('complete', session.id, [data.turn], { turn: data.turn, time: event.time, durationMs });
+      return emit('complete', session.id, [data.turn], withLabel({ turn: data.turn, time: event.time, durationMs }, session));
     }
 
     const current = currentFor(state, data.turn);
@@ -130,7 +149,7 @@ export function createNotifier({
       // 最终文本之后的任何 tool/call 都撤销完成候选，包括提问工具。
       current.final = false;
       if (data.name === 'ask_user_question' && isId(data.callId)) {
-        return emit('question', session.id, [data.callId], { turn: data.turn, time: event.time });
+        return emit('question', session.id, [data.callId], withLabel({ turn: data.turn, time: event.time }, session));
       }
     }
     return null;
@@ -142,10 +161,10 @@ export function createNotifier({
     if (!session || !accepts(session) || change?.operation !== 'block'
       || !isId(change.ref?.id) || !isTurn(change.ref?.revision)) return null;
     // goal/changed.complete 不通知，完成语义统一由最终回答的 turn/end 决定。
-    return emit('block', session.id, [change.ref.id, change.ref.revision], {
+    return emit('block', session.id, [change.ref.id, change.ref.revision], withLabel({
       ...(sessions.get(session.id)?.current ? { turn: sessions.get(session.id).current.turn } : {}),
       time: change.goal?.updatedAt,
-    });
+    }, session));
   }
 
   function agentError(payload) {
@@ -155,9 +174,9 @@ export function createNotifier({
     const current = sessions.get(session.id)?.current;
     if (current?.turn === payload.turn) current.failed = true;
     // turn/step 为 0 是轮次开始之前的运行错误，不显示不存在的 turn #0。
-    return emit('error', session.id, [payload.turn, payload.step], {
+    return emit('error', session.id, [payload.turn, payload.step], withLabel({
       ...(payload.turn > 0 ? { turn: payload.turn } : {}),
-    });
+    }, session));
   }
 
   function disposeSession(session) {

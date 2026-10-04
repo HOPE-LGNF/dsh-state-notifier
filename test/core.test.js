@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createNotifier, NOTICE_KINDS, STATE_LIMITS } from '../src/core.js';
+import { createNotifier, LABEL_LIMIT, NOTICE_KINDS, STATE_LIMITS } from '../src/core.js';
 
 const mainSession = (id = 'main', header = {}) => ({ id, header });
 const text = value => ({ type: 'text', text: value });
@@ -370,4 +370,23 @@ test('输出同步/异步失败已隔离，并在失败后仍消费重复事件'
     assert.equal(h.send(session, 'turn/end', { turn: 1, reason: { kind: 'completed' } }, 12_000), null);
     await new Promise(resolve => setImmediate(resolve));
   }
+});
+
+test('宿主提供的会话名进入通知，缺失或异常时不写入字段', () => {
+  const titled = harness({ resolveLabel: () => '修复登录超时' });
+  const named = titled.complete(mainSession());
+  assert.equal(named.sessionLabel, '修复登录超时');
+
+  const blank = harness({ resolveLabel: () => '   ' });
+  assert.equal('sessionLabel' in blank.complete(mainSession()), false, '空名字不得进入载荷');
+
+  const broken = harness({ resolveLabel: () => { throw new Error('标题服务异常'); } });
+  assert.equal(broken.complete(mainSession())?.kind, 'complete', '解析失败不能影响通知');
+  assert.equal('sessionLabel' in broken.notices[0], false);
+
+  const noisy = harness({ resolveLabel: () => `  第一行\u0000\u001b[31m  ${'x'.repeat(200)}  ` });
+  const label = noisy.complete(mainSession()).sessionLabel;
+  assert.equal(label.startsWith('第一行'), true);
+  assert.equal(label.includes('\u0000'), false);
+  assert.equal(label.length <= LABEL_LIMIT, true);
 });

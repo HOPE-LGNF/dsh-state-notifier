@@ -44,6 +44,10 @@ export function apply(ctx, input = {}, output = {}) {
   };
   const notifier = createNotifier({
     enabled: config.enabled, events: config.events, minDurationMs: config.minDuration * 1000,
+    // sessionTitle 不是必需依赖：缺失或读取失败时浏览器回退到会话短标识。
+    resolveLabel(session) {
+      try { return ctx.get('sessionTitle')?.get?.(session)?.title; } catch { return undefined; }
+    },
     onNotice(notice) {
       if (disposed) return;
       // 独立输出，日志失败不能阻断浏览器通知或终端提醒。
