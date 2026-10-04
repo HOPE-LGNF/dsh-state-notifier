@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBrowserNotifier, PREFERENCES_KEY, RECEIPTS_KEY, startPolling } from '../src/browser.js';
+import { createBrowserNotifier, ICON_DATA_LIMIT, LEGACY_PREFERENCES_KEY, PREFERENCES_KEY, RECEIPTS_KEY, startPolling } from '../src/browser.js';
 
 const event = { id: 'epoch:1', kind: 'complete', sessionId: '12345678-private-session', time: 1 };
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
@@ -240,4 +240,84 @@ test('host terminal/none policies suppress browser output', async () => {
   n.setHostState('terminal', false); await n.deliver(event);
   n.setHostState('none', false); await n.deliver({ ...event, id: 'epoch:2' });
   assert.equal(h.shown.length, 0); n.dispose();
+});
+
+test('通知正文显示真实会话短标识，不再输出被截断的 session- 前缀', async () => {
+  const h = harness();
+  const n = createBrowserNotifier(h.env);
+  await n.enableSound();
+  await n.deliver({ ...event, id: 'label:1', sessionId: 'session-2fcae467-71ee-4b75-b175-ec061bd76fd2' });
+  assert.equal(h.shown[0].options.body, '会话 2fcae467');
+  await n.deliver({ ...event, id: 'label:2', sessionId: 'plain-id-123456', sessionLabel: '修复登录超时' });
+  assert.equal(h.shown[1].options.body, '会话 plain-id', '默认不显示标题');
+  n.update({ showSessionTitle: true });
+  await n.deliver({ ...event, id: 'label:3', sessionId: 'session-2fcae467-71ee-4b75-b175-ec061bd76fd2', sessionLabel: '修复登录超时' });
+  assert.equal(h.shown[2].options.body, '会话 修复登录超时');
+  await n.deliver({ ...event, id: 'label:4', sessionId: 'session-2fcae467-71ee-4b75', sessionLabel: '' });
+  assert.equal(h.shown[3].options.body, '会话 2fcae467', '标题缺失时回退短标识');
+  n.dispose();
+});
+
+test('声音方案按事件类别生效，默认方案保持原音色', async () => {
+  const h = harness();
+  const n = createBrowserNotifier(h.env);
+  await n.enableSound();
+  assert.equal(h.starts(), 3, '默认完成音为三个音');
+  n.update({ sounds: { ...n.snapshot().preferences.sounds, complete: 'soft' } });
+  await n.enableSound('complete');
+  assert.equal(h.starts(), 5, '柔和完成音为两个音');
+  n.update({ sounds: { ...n.snapshot().preferences.sounds, complete: '不存在的方案' } });
+  assert.equal(n.snapshot().preferences.sounds.complete, 'soft', '未知方案被忽略而不是清空');
+  n.dispose();
+});
+
+test('v1 偏好可以迁移到 v2，且 v2 优先', () => {
+  const storage = new Map([[LEGACY_PREFERENCES_KEY, JSON.stringify({ enabled: true, sound: false, desktop: true, quietWhenFocused: true, volume: 0.25 })]]);
+  const h = harness({ storage });
+  const n = createBrowserNotifier(h.env);
+  const migrated = n.snapshot().preferences;
+  assert.equal(migrated.sound, false);
+  assert.equal(migrated.quietWhenFocused, true);
+  assert.equal(migrated.volume, 0.25);
+  assert.equal(migrated.sounds.complete, 'default', '缺失的字段取默认值');
+  assert.equal(h.storage.has(PREFERENCES_KEY), true, '迁移结果写回 v2');
+  n.dispose();
+
+  const both = new Map([
+    [LEGACY_PREFERENCES_KEY, JSON.stringify({ sound: false })],
+    [PREFERENCES_KEY, JSON.stringify({ sound: true })],
+  ]);
+  const h2 = harness({ storage: both });
+  const n2 = createBrowserNotifier(h2.env);
+  assert.equal(n2.snapshot().preferences.sound, true, 'v2 优先于 v1');
+  n2.dispose();
+});
+
+test('自定义图标只接受受支持且不超限的内联图片', async () => {
+  const h = harness();
+  const n = createBrowserNotifier(h.env);
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  assert.equal(n.setIcon(png), true);
+  assert.equal(n.snapshot().preferences.icon, 'custom');
+  assert.equal(n.snapshot().icon, png);
+  assert.equal(n.setIcon('data:text/html;base64,PHNjcmlwdD4='), false);
+  assert.equal(n.setIcon(`data:image/png;base64,${'A'.repeat(ICON_DATA_LIMIT * 2)}`), false);
+  assert.equal(n.snapshot().icon, png, '被拒绝的图标不覆盖已保存的图标');
+  assert.equal(h.storage.has(RECEIPTS_KEY), false);
+  n.update({ icon: '🔔', iconData: '' });
+  assert.equal(n.snapshot().preferences.icon, '🔔');
+  n.dispose();
+});
+
+test('自定义图标进入原生通知，内置图标不伪造 icon', async () => {
+  const h = harness();
+  const n = createBrowserNotifier(h.env);
+  await n.enableSound();
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  await n.deliver({ ...event, id: 'icon:1' });
+  assert.equal('icon' in h.shown[0].options, false, '默认铃铛不发 icon');
+  n.setIcon(png);
+  await n.deliver({ ...event, id: 'icon:2' });
+  assert.equal(h.shown[1].options.icon, png);
+  n.dispose();
 });
