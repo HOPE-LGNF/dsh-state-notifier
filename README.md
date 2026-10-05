@@ -32,6 +32,15 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifie
 npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
+不在本仓库时，直接安装 GitHub Release 附件（自带浏览器产物，无需本地构建）：
+
+```bash
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
+  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.3.1/dsh-state-notifier-0.3.1.tgz"
+```
+
+**不要用 Git 地址安装**（例如插件界面的仓库 URL 或 `github:owner/repo`）。浏览器产物 `dist/client.js` 不随 Git 分发：pnpm ≥10 默认阻止构建脚本，而放行所需的键包含提交号、每次更新都会变。用 Git 地址时，安装要么被 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 拒绝，要么装上后因缺少该文件而启动失败。请使用上面的 tgz 或 Release 附件。
+
 需要跟随最新发行版时，把版本替换为 `latest`。升级后先检查 [兼容检查步骤](#开发)，再用于日常任务。卸载使用 `dsh plugin --profile web remove dsh-state-notifier`。
 
 ## 启用浏览器提醒
