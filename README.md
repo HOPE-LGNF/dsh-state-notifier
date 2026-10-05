@@ -2,7 +2,7 @@
 
 为 DeepSeek Harness 提供五类提醒：任务完成、等待审批、等待回答、任务受阻、任务出错。
 
-这是 `0.3.0`。源码、发行记录与变更历史都在 [GitHub](https://github.com/HOPE-LGNF/dsh-state-notifier)。目标是准确判定事件，并保持代码容易接手。兼容基线见[调研](docs/RESEARCH.md#版本与证据边界)，已验证范围见[项目状态](docs/STATUS.md)。固定基线不保证支持以后的所有 `latest`。
+这是 `0.3.1`。源码、发行记录与变更历史都在 [GitHub](https://github.com/HOPE-LGNF/dsh-state-notifier)。目标是准确判定事件，并保持代码容易接手。兼容基线见[调研](docs/RESEARCH.md#版本与证据边界)，已验证范围见[项目状态](docs/STATUS.md)。固定基线不保证支持以后的所有 `latest`。
 
 ## 功能
 
@@ -28,7 +28,7 @@ npm pack
 再用你使用的 dsh 版本安装生成的本地包。以下命令使用固定的已测版本，并在仓库根目录执行（`$PWD` 指向该目录）：
 
 ```bash
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.3.0.tgz"
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.3.1.tgz"
 npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
