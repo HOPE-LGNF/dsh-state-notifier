@@ -1,6 +1,6 @@
 # 项目状态
 
-更新日期：2026-10-11。以下是已有源码检查与兼容检查的最近结果，不代表对 `0.3.1` 发布包的重新验证。兼容基线见 [README](../README.md#本地安装)，运行方法见[开发说明](../README.md#开发)和[浏览器检查](VALIDATION-browser.md)。
+更新日期：2026-10-12。以下是已有源码检查与兼容检查的最近结果，不代表对 `0.3.1` 发布包的重新验证。兼容基线见 [README](../README.md#本地安装)，运行方法见[开发说明](../README.md#开发)和[浏览器检查](VALIDATION-browser.md)。
 
 ## 已有检查结果
 
@@ -13,6 +13,7 @@
 | npm `0.2.1-alpha.1` | 本机重跑通过：当时 106 项测试（现为 112 项）与完整 Web 检查 | 测试用 dsh-session/dsh-scope `0.2.1-alpha.1` 加 cordis `4.0.5-alpha.1`；Web 覆盖认证、入口、连接与声音解锁 |
 | 插件安装版本门 | 拒绝 `0.1.7-rc.1`，接受 rc.2 与 alpha.1 | 用真实插件包逐向验证；范围同时声明在 `package.json` 的 `engines.dsh` 与 `peerDependencies` |
 | 打包 | 通过 | 包含宿主源码、浏览器产物、patch 与许可证；不含文档，文档只在仓库中维护 |
+| 真实浏览器（维护者提供截图） | 设置面板完整渲染：四类开关、五种事件的声音方案与试听、六种图标、自定义图标与两个内容开关 | 安装在日常 profile（按 Release 附件安装，产物哈希与仓库构建一致）；非无头环境。不证明系统横幅、点击回会话或免打扰 |
 
 rc.2 完整 Web 检查使用隔离环境和无凭据回合。系统通知权限为 `denied`，因此只确认声音输出的 API 调用。远端 CI 结果见 [GitHub Actions](https://github.com/HOPE-LGNF/dsh-state-notifier/actions)。
 
