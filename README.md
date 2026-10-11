@@ -2,7 +2,7 @@
 
 为 DeepSeek Harness 提供五类提醒：任务完成、等待审批、等待回答、任务受阻、任务出错。
 
-这是 `0.3.1`。源码、发行记录与变更历史都在 [GitHub](https://github.com/HOPE-LGNF/dsh-state-notifier)。目标是准确判定事件，并保持代码容易接手。兼容基线见[调研](docs/RESEARCH.md#版本与证据边界)，已验证范围见[项目状态](docs/STATUS.md)。固定基线不保证支持以后的所有 `latest`。
+这是 `0.3.1`。源码、发行记录与变更历史都在 [GitHub](https://github.com/HOPE-LGNF/dsh-state-notifier)。目标是准确判定事件，并保持代码容易接手。已验证范围见[项目状态](docs/STATUS.md)。固定基线不保证支持以后的所有 `latest`。
 
 ## 功能
 
@@ -107,12 +107,11 @@ git -C /path/to/deepseek-harness rev-parse HEAD
 node scripts/check-upstream.mjs /path/to/deepseek-harness
 ```
 
-将路径替换为本机宿主仓库。此脚本只替换 Session 实现，其他依赖来自本项目锁文件。还需核对[官方 Connection 与插槽契约](docs/RESEARCH.md#两条兼容基线)，并按[浏览器检查方法](docs/VALIDATION-browser.md)运行完整应用。
+将路径替换为本机宿主仓库。此脚本只替换 Session 实现，其他依赖来自本项目锁文件。还需核对[传输协议与插槽职责](docs/ARCHITECTURE.md#传输协议)，并按[浏览器检查方法](docs/VALIDATION-browser.md)运行完整应用。
 
 需要离线导出时，在干净且已提交的工作树运行 `node scripts/export.mjs`。脚本生成 Git bundle 和 SHA-256 文件，并克隆恢复以比对 HEAD。
 
 - [架构](docs/ARCHITECTURE.md)：模块职责、协议与生命周期。
-- [调研](docs/RESEARCH.md)：兼容基线、官方接口与选型依据。
 - [项目状态](docs/STATUS.md)：最新结果与待完成事项。
 - [浏览器检查](docs/VALIDATION-browser.md)：夹具、完整 Web 与 Windows 操作。
 - [开发约定](AGENTS.md)：修改、提交与发布要求。

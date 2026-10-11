@@ -1,6 +1,6 @@
 # 开发约定
 
-先读 [README](README.md)、[架构](docs/ARCHITECTURE.md)和[项目状态](docs/STATUS.md)。兼容基线见[调研](docs/RESEARCH.md)，浏览器操作见[检查方法](docs/VALIDATION-browser.md)。
+先读 [README](README.md)、[架构](docs/ARCHITECTURE.md)和[项目状态](docs/STATUS.md)。兼容基线见 [README](README.md)，浏览器操作见[检查方法](docs/VALIDATION-browser.md)。
 
 ## 文档
 

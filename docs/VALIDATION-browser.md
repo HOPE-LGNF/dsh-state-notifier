@@ -10,7 +10,7 @@
 PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node scripts/browser-smoke.mjs
 ```
 
-将模块路径替换为本机路径。环境能直接解析 `playwright` 时，可省略该变量。`PLAYWRIGHT_CHANNEL` 默认为 `chrome`，也可设为已安装的 `msedge`。
+将模块路径替换为本机路径。环境能直接解析 `playwright` 时，可省略该变量。`PLAYWRIGHT_CHANNEL` 默认为 `chrome`，也可设为已安装的 `msedge`；没有系统 Chrome 时用 `chromium`（Playwright 自带）。
 
 脚本使用临时浏览器上下文，结束后关闭浏览器。具体检查项见 [browser-smoke.mjs](../scripts/browser-smoke.mjs)。上下文会显式授予通知权限；API 调用成功不证明系统弹窗可见或声音可听。
 
@@ -28,7 +28,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifie
 npx @deepseek-ai/dsh@0.2.0-rc.2 web --no-open --host 127.0.0.1 --port 7712
 ```
 
-版本选择见[兼容基线](RESEARCH.md#版本与证据边界)。不要使用日常 profile、凭据或历史会话。
+版本选择见 [README](../README.md#本地安装)。不要使用日常 profile、凭据或历史会话。
 
 在另一个终端运行以下命令。将 URL 和 token 替换为宿主输出的值。将工作区路径替换为上一步创建的目录，将 Playwright 路径替换为本机路径。
 

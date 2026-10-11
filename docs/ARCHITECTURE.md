@@ -13,7 +13,7 @@
               ↓
         journal.js 有界记录
               ↓
-     官方 Connection RPC 长轮询
+     官方 Connection 受认证长轮询
               ↓
        browser.js 浏览器输出
               ↑
@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | `src/core.js` | 回合状态、五类分类、主会话过滤、有界去重 | 网络、声音、持久化 |
 | `src/journal.js` | 实例标识、序号、256 条记录、等待与取消、浏览器就绪租约 | 判断任务是否完成 |
-| `src/index.js` | Config、Cordis 监听、官方 RPC 注册、终端输出、卸载 | 浏览器权限、用户正文 |
+| `src/index.js` | Config、Cordis 监听、官方 Connection 路由注册、终端输出、卸载 | 浏览器权限、用户正文 |
 | `src/browser.js` | 浏览器偏好、声音、系统通知、跨标签回执、串行长轮询 | 重新解释 Session 事件 |
 | `src/client.js` | React 控件、设置与会话头部插槽 | 复制播放器实现 |
 
@@ -44,7 +44,7 @@ Cordis 注册的监听和依赖由框架回收。手工定时器、等待请求�
 
 公开路由是共享 `/api` 通道上的精确 Fetch 路由 `/api/state-notifier`，请求方法为 POST。客户端调用 `ctx.connection.rpc.call('/api', 'state-notifier', request, signal)`。宿主使用 `ctx.connection.fetch.register({ path, methods: ['POST'], requestBody: 'buffered', fetch })`。官方 Connection 负责 Host/Origin 检查、浏览器认证、请求关联与取消。插件不注册裸 HTTP 写接口。
 
-`connection.rpc.handle` 在兼容基线中不支持晚加载的插件，因此使用 Fetch 路由。原因见[接口调研](RESEARCH.md#流与客户端)。
+`connection.rpc.handle` 在两条兼容基线中都不支持晚加载的插件：官方实现用调用方 Context 读取 `webServer` 注册前缀路由，而 Cordis 的服务属性读取会沿 shadow 起点回溯到提供 `connection` 的 fiber，因此抛 `cannot get property "webServer" without inject`，错误只进入静默日志。Fetch 路由不读取其它服务，因此改用路由注册。
 
 请求含 `clientId`、`browserReady`、`cursor`。游标为空时只取得当前基线。后续游标为 `{ epoch, seq }`。响应含 `epoch`、`cursor`、`reset`、`notices` 和 `playback`。
 
@@ -83,6 +83,6 @@ core 从 `ask_user_question` 的 JSON 参数提取问题。每道问题清除控
 
 ## 兼容策略
 
-使用[兼容基线](RESEARCH.md#版本与证据边界)支持的公开 Connection 接口。当前不使用私有字段、手写 Typert manifest 或基于函数参数名的弱解析。
+使用 [README](../README.md#本地安装) 所列兼容基线支持的公开 Connection 接口。当前不使用私有字段、手写 Typert manifest 或基于函数参数名的弱解析。
 
 未来若官方提供稳定的通知服务或外部插件的完整 Remote 生成工具，先确认迁移能减少代码，再替换传输层。不要让迁移改变 core 的事件语义。
