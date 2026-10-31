@@ -83,7 +83,7 @@ npm pack
 以下命令使用固定的已测版本，并在仓库根目录执行（`$PWD` 指向该目录）：
 
 ```bash
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.5.0.tgz"
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.6.0.tgz"
 npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
@@ -91,7 +91,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 ```bash
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
-  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.5.0/dsh-state-notifier-0.5.0.tgz"
+  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.6.0/dsh-state-notifier-0.6.0.tgz"
 ```
 
 > [!WARNING]
@@ -161,7 +161,7 @@ Windows 通知由 **Windows 上打开 dsh 页面的浏览器**发送，dsh 宿�
 ```bash
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-state-notifier
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
-  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.5.0/dsh-state-notifier-0.5.0.tgz"
+  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.6.0/dsh-state-notifier-0.6.0.tgz"
 ```
 
 直接对同一个旧 URL 重复 `add` 不会更新，因为 pnpm 认为该规格已满足。换版本必须让 URL 变，或先 `remove`。
