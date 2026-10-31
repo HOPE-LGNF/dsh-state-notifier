@@ -91,7 +91,7 @@ export function apply(ctx) {
     const select = (key, label, value, onChange, options) => h('select', { key, value, 'aria-label': label, onChange: event => onChange(event.target.value) },
       options.map(([id, text]) => h('option', { key: id, value: id }, text)));
     const presetOptions = Object.entries(SOUND_PRESET_LABELS);
-    const content = h('div', { role: 'group', 'aria-label': '任务状态提醒设置', style: { padding: 12, minWidth: 280, maxWidth: 400, fontSize: 13, lineHeight: 1.6 } },
+    const content = h('div', { role: 'group', 'aria-label': '任务状态提醒设置', style: { padding: 12, minWidth: compact ? 280 : 0, maxWidth: compact ? 400 : 760, fontSize: 13, lineHeight: 1.6 } },
       h('strong', null, preview, ' 任务状态提醒'),
       toggle('enabled', '启用此浏览器的提醒', p.enabled, value => notifier.update({ enabled: value })),
       toggle('sound', '播放声音', p.sound, value => { if (value) void notifier.unlockSound(); else notifier.update({ sound: false }); }),
@@ -183,7 +183,7 @@ export function apply(ctx) {
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities', id: 'state-notifier', order: 90,
   }, () => h(Controls, { compact: true })));
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item', id: 'state-notifier', order: 90,
-  }, Controls));
+  ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+    name: 'plugins.row.config', key: 'dsh-state-notifier#state-notifier',
+  }, ({ view }) => view === 'page' ? h(Controls) : null));
 }

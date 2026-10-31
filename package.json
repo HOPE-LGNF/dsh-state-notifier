@@ -22,6 +22,8 @@
     "dist/client.js",
     "cordis.patch.yml",
     "README.md",
+    "DETAILS.md",
+    "locale/*.json",
     "CHANGELOG.md",
     "LICENSE"
   ],

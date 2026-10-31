@@ -82,25 +82,56 @@ try {
   assert.equal(wrongMethod.status(), 404, '未声明的方法必须由官方路由拒绝');
   pass('已登录的未声明方法回到官方 404', `HTTP ${wrongMethod.status()}`);
 
-  // 2. “常规”设置入口必须出现，并显示已连接到宿主订阅。声音也在这里解锁，位置与会话是否非空无关。
-  await page.getByRole('button', { name: 'Settings' }).first().click({ force: true });
+  // 2. 通用设置和插件包介绍页不放提醒面板；从“包含的组件”进入配置页。
+  const settingsName = /^(Settings|设置)$/;
+  const settingsButton = page.getByRole('button', { name: settingsName });
+  if (await settingsButton.count()) await settingsButton.first().click({ force: true });
+  else {
+    await page.getByRole('button', { name: /^(Account menu|账号菜单)$/ }).click();
+    await page.getByRole('menuitem', { name: settingsName }).click();
+  }
+  await page.getByRole('dialog', { name: /^(Settings|设置)$/ }).waitFor({ state: 'visible' });
   const panel = page.getByRole('group', { name: '任务状态提醒设置', exact: true });
+  assert.equal(await panel.count(), 0, '通用设置不应再显示提醒面板');
+  result.ui.generalSettingsAbsent = true;
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^(Plugins|插件)$/ }).first().click({ force: true });
+  await page.getByRole('button', { name: /^(View|查看) dsh-state-notifier$/ }).click();
+  const configure = page.getByRole('button', { name: /^(Configure|配置) dsh-state-notifier$/ });
+  await configure.waitFor({ state: 'visible' });
+  assert.equal(await panel.count(), 0, '插件包介绍页不应直接显示提醒面板');
+  result.ui.bundleSettingsAbsent = true;
+  await configure.click();
+  await page.locator('[data-plugin-row-detail="dsh-state-notifier#state-notifier"]').waitFor({ state: 'visible' });
   await panel.waitFor({ state: 'visible' });
   await panel.getByText('权限及运行信息', { exact: true }).click();
   await panel.getByText('提醒服务已连接', { exact: true }).waitFor({ state: 'visible' });
-  result.ui.settingsItem = true;
+  result.ui.componentSettingsItem = true;
   result.ui.transport = '提醒服务已连接';
   result.ui.permission = await page.evaluate(() => Notification.permission);
   if (result.ui.permission !== 'granted') result.limits.push('桌面通知权限未获准；本次只能验证声音输出。');
-  pass('设置“常规”入口出现且订阅已连接');
+  pass('通用设置与包介绍页不显示面板，组件配置页显示设置且订阅已连接');
   await panel.getByRole('checkbox', { name: '播放声音', exact: true }).check();
   const unlock = panel.getByRole('button', { name: /^点击解锁声音/ });
   if (await unlock.count()) await unlock.click();
   await panel.getByText('声音已解锁', { exact: true }).waitFor({ state: 'visible' });
   result.ui.soundUnlocked = true;
   pass('声音已解锁，浏览器具备输出能力');
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(800);
+  const question = panel.getByRole('checkbox', { name: /^显示提问的问题/ });
+  await panel.getByText('通知外观', { exact: true }).click();
+  const originalQuestion = await question.isChecked();
+  await question.setChecked(!originalQuestion);
+  await page.getByRole('button', { name: /^(Back to|返回) dsh-state-notifier$/ }).click();
+  await panel.waitFor({ state: 'hidden' });
+  await configure.click();
+  await panel.getByText('通知外观', { exact: true }).click();
+  assert.equal(await question.isChecked(), !originalQuestion, '重新打开组件配置页必须保留浏览器偏好');
+  await panel.getByText('权限及运行信息', { exact: true }).click();
+  await panel.getByText('声音已解锁', { exact: true }).waitFor({ state: 'visible' });
+  result.ui.preferencesAfterNavigation = true;
+  pass('组件配置页关闭并重开后保留偏好，声音仍已解锁');
+  await page.getByRole('button', { name: /^(New session|New chat|新会话)$/ }).last().click({ force: true });
+  await panel.waitFor({ state: 'hidden' });
 
   // 3. 每次按指定路径选择验收工作区，不依赖工作区名称或上次选择。
   const addWorkspace = page.getByRole('button', { name: 'Add workspace', exact: true });
