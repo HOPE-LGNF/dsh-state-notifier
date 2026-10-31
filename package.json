@@ -1,12 +1,32 @@
 {
   "name": "dsh-state-notifier",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "DeepSeek Harness 的完成、审批、提问、受阻和错误通知",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HOPE-LGNF/dsh-state-notifier.git"
+  },
+  "homepage": "https://github.com/HOPE-LGNF/dsh-state-notifier#readme",
+  "bugs": {
+    "url": "https://github.com/HOPE-LGNF/dsh-state-notifier/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "notification",
+    "notifications",
+    "desktop-notifications",
+    "system-notifications",
+    "approval",
+    "toast",
+    "windows",
+    "wsl"
+  ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0",
-    "dsh": ">=0.2.0-rc.2 <0.3.0-0"
+    "dsh": ">=0.2.0-rc.2 <0.3.0-0 || >=0.2.1-0 <0.3.0-0 || >=0.2.2-0 <0.3.0-0"
   },
   "main": "src/index.js",
   "exports": {
@@ -50,7 +70,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0"
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0 || >=0.2.1-0 <0.3.0-0 || >=0.2.2-0 <0.3.0-0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh": {
