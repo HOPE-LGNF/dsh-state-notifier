@@ -3,6 +3,8 @@ import { createBrowserNotifier, LABELS, SOUND_PRESET_LABELS, ICON_CHOICES, CUSTO
 
 export const inject = ['slots', 'connection'];
 
+let uploadSeq = 0;
+
 export function apply(ctx) {
   const notifier = createBrowserNotifier(globalThis, sessionId => {
     const navigation = ctx.get('uiWorkspace');
@@ -22,7 +24,10 @@ export function apply(ctx) {
   function Controls({ compact = false }) {
     const [, refresh] = React.useReducer(value => value + 1, 0);
     const [iconError, setIconError] = React.useState('');
+    const [iconName, setIconName] = React.useState('');
     const [, setTick] = React.useState(0);
+    const uploadId = React.useRef('');
+    if (!uploadId.current) uploadId.current = `dsh-icon-upload-${++uploadSeq}`;
     React.useEffect(() => notifier.subscribe(refresh), []);
     const state = notifier.snapshot();
     const p = state.preferences;
@@ -30,6 +35,7 @@ export function apply(ctx) {
       const file = event.target.files?.[0];
       event.target.value = '';
       if (!file) return;
+      setIconName(file.name);
       const reader = new FileReader();
       reader.onload = () => {
         setIconError(notifier.setIcon(String(reader.result)) ? '' : '图标未保存：只接受 32KB 以内的 PNG、JPEG、WebP、GIF 或 SVG');
@@ -76,8 +82,14 @@ export function apply(ctx) {
             }, icon))))),
         row('upload', h('div', null,
           h('div', null, '自定义图标（仅保存在本机）'),
-          h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml', 'aria-label': '上传自定义图标', onChange: onIconFile }),
-          p.icon === CUSTOM_ICON && h('button', { type: 'button', onClick: () => notifier.update({ icon: ICON_CHOICES[0], iconData: '' }) }, '清除自定义图标'),
+          h('input', {
+            id: uploadId.current, type: 'file', style: { display: 'none' },
+            accept: 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml', 'aria-label': '上传自定义图标', onChange: onIconFile,
+          }),
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+            h('label', { htmlFor: uploadId.current, role: 'button', tabIndex: 0, style: { cursor: 'pointer', border: '1px solid var(--dsw-alias-border-l2, GrayText)', borderRadius: 6, padding: '2px 10px' } }, '选择图标文件'),
+            h('span', { style: { opacity: 0.7 } }, iconName || (p.icon === CUSTOM_ICON ? '已使用自定义图标' : '未选择文件')),
+            p.icon === CUSTOM_ICON && h('button', { type: 'button', onClick: () => { notifier.update({ icon: ICON_CHOICES[0], iconData: '' }); setIconName(''); } }, '清除')),
           iconError && h('div', { role: 'alert', style: { color: 'var(--dsw-alias-label-error, #c00)' } }, iconError))),
         toggle('title', '通知中显示会话标题（默认只显示会话短标识）', p.showSessionTitle, value => notifier.update({ showSessionTitle: value })),
         toggle('question', '显示提问的问题（默认开启）', p.showQuestion, value => notifier.update({ showQuestion: value })),
@@ -92,7 +104,7 @@ export function apply(ctx) {
     );
     return compact ? h('details', { style: { position: 'relative' } },
       h('summary', { 'aria-label': '任务状态提醒', title: '任务状态提醒', style: { cursor: 'pointer', listStyle: 'none', padding: '4px 8px' } }, p.enabled ? preview : '🔕'),
-      h('div', { style: { position: 'absolute', zIndex: 100, right: 0, background: 'var(--dsw-alias-bg-layer-2, Canvas)', color: 'var(--dsw-alias-label-primary, CanvasText)', border: '1px solid var(--dsw-alias-border-l2, GrayText)', borderRadius: 8, boxShadow: '0 4px 16px #0003' } }, content)) : content;
+      h('div', { style: { position: 'absolute', zIndex: 100, right: 0, maxHeight: 'min(72vh, 640px)', overflowY: 'auto', overscrollBehavior: 'contain', background: 'var(--dsw-alias-bg-layer-2, Canvas)', color: 'var(--dsw-alias-label-primary, CanvasText)', border: '1px solid var(--dsw-alias-border-l2, GrayText)', borderRadius: 8, boxShadow: '0 4px 16px #0003' } }, content)) : content;
   }
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities', id: 'state-notifier', order: 90,
