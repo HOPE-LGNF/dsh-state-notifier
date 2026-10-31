@@ -2,7 +2,7 @@
 
 为 DeepSeek Harness 提供五类提醒：任务完成、等待审批、等待回答、任务受阻、任务出错。
 
-这是 `0.4.0`。源码、发行记录与变更历史都在 [GitHub](https://github.com/HOPE-LGNF/dsh-state-notifier)。目标是准确判定事件，并保持代码容易接手。已验证范围见[项目状态](docs/STATUS.md)。固定基线不保证支持以后的所有 `latest`。
+这是 `0.5.0`。源码、发行记录与变更历史都在 [GitHub](https://github.com/HOPE-LGNF/dsh-state-notifier)。目标是准确判定事件，并保持代码容易接手。已验证范围见[项目状态](docs/STATUS.md)。固定基线不保证支持以后的所有 `latest`。
 
 ## 功能
 
@@ -29,7 +29,7 @@ npm pack
 再用你使用的 dsh 版本安装生成的本地包。以下命令使用固定的已测版本，并在仓库根目录执行（`$PWD` 指向该目录）：
 
 ```bash
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.4.0.tgz"
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.5.0.tgz"
 npx @deepseek-ai/dsh@0.2.0-rc.2 web
 ```
 
@@ -37,7 +37,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 web
 
 ```bash
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
-  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.4.0/dsh-state-notifier-0.4.0.tgz"
+  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.5.0/dsh-state-notifier-0.5.0.tgz"
 ```
 
 **不要用 Git 地址安装**（例如插件界面的仓库 URL 或 `github:owner/repo`）。浏览器产物 `dist/client.js` 不随 Git 分发：pnpm ≥10 默认阻止构建脚本，而放行所需的键包含提交号、每次更新都会变。用 Git 地址时，安装要么被 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 拒绝，要么装上后因缺少该文件而启动失败。请使用上面的 tgz 或 Release 附件。
@@ -49,7 +49,7 @@ npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
 ```bash
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-state-notifier
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
-  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.4.0/dsh-state-notifier-0.4.0.tgz"
+  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.5.0/dsh-state-notifier-0.5.0.tgz"
 ```
 
 直接对同一个旧 URL 重复 `add` 不会更新：pnpm 认为该规格已满足。所以换版本必须让 URL 变，或先 `remove`。
