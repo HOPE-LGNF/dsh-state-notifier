@@ -144,8 +144,66 @@ try {
   exit 1
 }`;
 
+/** 发送一条测试通知并回报系统的通知许可状态。 */
+const TEST_SCRIPT = `$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+try {
+  $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+  $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
+  $payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__PAYLOAD__')) | ConvertFrom-Json
+  $appId = '__APPID__'
+  $key = "HKCU:\\Software\\Classes\\AppUserModelId\\$appId"
+  New-Item -Path $key -Force | Out-Null
+  Set-ItemProperty -Path $key -Name DisplayName -Value 'DeepSeek Harness'
+  $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId)
+  $setting = [int]$notifier.Setting
+  $title = [Security.SecurityElement]::Escape([string]$payload.title)
+  $body = [Security.SecurityElement]::Escape([string]$payload.body)
+  $scenario = ''
+  if ([Environment]::OSVersion.Version.Build -ge 22621) { $scenario = ' scenario="urgent"' }
+  $xmlText = '<toast' + $scenario + '><visual><binding template="ToastGeneric"><text>' + $title + '</text><text>' + $body + '</text></binding></visual></toast>'
+  $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+  $xml.LoadXml($xmlText)
+  $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
+  $notifier.Show($toast)
+  Write-Output ('RESULT ok setting=' + $setting)
+} catch {
+  Write-Output ('RESULT fail ' + $_.Exception.Message)
+  exit 1
+}`;
+
+/** WinRT NotificationSetting 的取值含义。 */
+export const SETTING_STATES = Object.freeze({
+  0: 'allowed', 1: 'disabled-for-app', 2: 'disabled-for-user',
+  3: 'disabled-by-policy', 4: 'disabled-by-manifest',
+});
+
 const encodePayload = payload => Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
 const encodeScript = script => Buffer.from(script, 'utf16le').toString('base64');
+
+/**
+ * 发一条测试通知并回报许可状态。永不抛错。
+ * @returns {Promise<{ok: boolean, setting?: number, state?: string, reason?: string}>}
+ */
+export function test(executable, { title, body }) {
+  return new Promise(resolve => {
+    if (!isAllowed(executable)) { resolve({ ok: false, reason: '解释器不在白名单内' }); return; }
+    const script = TEST_SCRIPT
+      .replace('__PAYLOAD__', encodePayload({ title: String(title ?? ''), body: String(body ?? '') }))
+      .replace('__APPID__', NATIVE_APP_ID);
+    try {
+      execFile(executable, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encodeScript(script)], {
+        timeout: EXEC_TIMEOUT_MS, windowsHide: true,
+      }, (error, stdout) => {
+        const match = /RESULT ok setting=(\d+)/.exec(String(stdout ?? ''));
+        if (error || !match) { resolve({ ok: false, reason: error?.killed ? '执行超时' : '执行失败' }); return; }
+        const setting = Number(match[1]);
+        resolve({ ok: true, setting, state: SETTING_STATES[setting] ?? 'unknown' });
+      });
+    } catch { resolve({ ok: false, reason: '无法启动解释器' }); }
+  });
+}
 
 /**
  * 发一条原生通知。永不抛错：宿主侧通知失败不能影响 Agent。

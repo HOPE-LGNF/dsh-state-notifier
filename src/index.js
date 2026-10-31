@@ -1,7 +1,7 @@
 import z from '@deepseek-ai/schemastery';
 import { createNotifier } from './core.js';
 import { createJournal } from './journal.js';
-import { notify as nativeNotify, probe as nativeProbe, resolveExecutable as nativeResolve } from './native.js';
+import { notify as nativeNotify, probe as nativeProbe, resolveExecutable as nativeResolve, test as nativeTest } from './native.js';
 
 export const name = 'state-notifier';
 export const inject = [];
@@ -29,6 +29,7 @@ export function apply(ctx, input = {}, output = {}) {
   // output.probe / output.notify 仅供测试注入，生产不传。
   const probeImpl = output.probe ?? nativeProbe;
   const sendImpl = output.notify ?? nativeNotify;
+  const testImpl = output.test ?? nativeTest;
   let detectedCache;
   const detect = () => (detectedCache ??= probeImpl());
   // 运行时覆盖：面板改动立即生效；重启后回到 profile 配置的值。
@@ -116,6 +117,17 @@ export function apply(ctx, input = {}, output = {}) {
           type: 'server-response', rpcId: body.rpcId,
           result: { ok: true, value: { ...detect(), mode, manual, lastNative, resolved: nativeResolve(mode, nativePath, detect()) } },
         });
+      }
+      if (body.payload?.action === 'testNative') {
+        const resolved = nativeResolve(nativeMode === 'off' ? 'auto' : nativeMode, nativePath, detect());
+        if (!resolved.ok) {
+          return Response.json({ type: 'server-response', rpcId: body.rpcId, result: { ok: true, value: { ok: false, reason: resolved.reason } } });
+        }
+        const outcome = await testImpl(resolved.path, {
+          title: 'dsh 通道测试',
+          body: '这是来自任务状态提醒的测试通知；看到它说明原生通道可用。',
+        });
+        return Response.json({ type: 'server-response', rpcId: body.rpcId, result: { ok: true, value: { ...outcome, path: resolved.path } } });
       }
       if (body.payload?.action === 'setNative') {
         const { mode, path } = body.payload;

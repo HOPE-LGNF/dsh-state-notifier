@@ -27,6 +27,8 @@ export function apply(ctx) {
     const [iconName, setIconName] = React.useState('');
     const [native, setNative] = React.useState(null);
     const [probing, setProbing] = React.useState(false);
+    const [testing, setTesting] = React.useState(false);
+    const [testResult, setTestResult] = React.useState(null);
     const [manualPath, setManualPath] = React.useState('');
     const [, setTick] = React.useState(0);
     const uploadId = React.useRef('');
@@ -68,6 +70,20 @@ export function apply(ctx) {
         setNative(current => ({ ...(current ?? {}), ...value, available: value.detected?.available ?? current?.available }));
         if (value.path) setManualPath(value.path);
       } catch { /* 失败由下一次探测暴露 */ }
+    };
+    const STATE_TEXT = {
+      allowed: '系统允许通知',
+      'disabled-for-app': '该应用的通知被关闭（设置 → 系统 → 通知 → DeepSeek Harness）',
+      'disabled-for-user': '当前用户的通知被关闭',
+      'disabled-by-policy': '被组策略禁用',
+      'disabled-by-manifest': '被应用清单禁用',
+      unknown: '通知状态未知',
+    };
+    const runTest = async () => {
+      setTesting(true);
+      try { setTestResult(await callHost({ action: 'testNative' })); }
+      catch { setTestResult({ ok: false, reason: '请求失败' }); }
+      finally { setTesting(false); }
     };
     const preview = String(state.icon ?? '').startsWith('data:')
       ? h('img', { src: state.icon, alt: '自定义图标', width: 16, height: 16, style: { verticalAlign: '-3px' } })
@@ -142,9 +158,16 @@ export function apply(ctx) {
               style: { flex: 1, minWidth: 0 }, onChange: event => setManualPath(event.target.value),
             }),
             h('button', { type: 'button', onClick: () => { void applyNative('manual', manualPath); } }, '应用')))) ,
+        row('test', h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
+          h('button', { type: 'button', onClick: () => { void runTest(); }, disabled: testing }, testing ? '发送中…' : '发送测试通知'),
+          testResult && h('span', { style: { opacity: 0.85 } },
+            testResult.ok ? `已发出 · ${STATE_TEXT[testResult.state] ?? STATE_TEXT.unknown}` : `失败：${testResult.reason ?? '未知'}`))),
         row('hint', h('small', null,
           '绕过浏览器与专注助手的限制，在全屏、免打扰下也能显示。仅 Windows 与 WSL；只接受 powershell.exe 或 pwsh.exe。'
           + '模式改动立即生效，重启后回到 profile 配置的 native 值。')),
+        row('allow', h('small', null,
+          '首次启用时 Windows 可能询问是否允许此应用发送通知，请选择允许。若曾关闭，可在“设置 → 系统 → 通知”里重新打开；'
+          + '插件不会尝试绕过这个决定。')),
       ]),
       collapsible('runtime', '权限及运行信息', [
         ...[state.soundStatus, state.desktopStatus, state.storageStatus, state.tabStatus, state.transport, state.resetMessage, state.navigationError]

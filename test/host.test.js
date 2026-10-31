@@ -79,6 +79,7 @@ async function boot(config = {}, output = {}) {
         isTTY: output.isTTY ?? (() => true),
         probe: output.probe,
         notify: output.notify,
+        test: output.test,
       });
     },
   });
@@ -403,4 +404,29 @@ test('Host：穿透关闭时不调用原生，通知不带 native 标记', async
   assert.equal(calls, 0);
   const next = await within(h.call({ ...request(cursorOf(baseline.value)) }));
   assert.equal(next.value.notices[0].native, false);
+});
+
+test('Host：测试通道返回系统许可状态，被禁用时如实上报', async t => {
+  for (const [setting, state] of [[0, 'allowed'], [1, 'disabled-for-app'], [3, 'disabled-by-policy']]) {
+    const h = await boot({ native: 'auto' }, {
+      probe: () => ({ platform: 'win32', wsl: false, available: true, candidates: ['/fake/powershell.exe'], reason: '' }),
+      test: async () => ({ ok: true, setting, state }),
+    });
+    t.after(() => h.stop());
+    const result = await within(h.call({ action: 'testNative' }));
+    assert.equal(result.ok, true);
+    assert.equal(result.value.state, state);
+    assert.equal(result.value.path, '/fake/powershell.exe');
+  }
+});
+
+test('Host：无可执行文件时测试通道给出原因而不是抛错', async t => {
+  const h = await boot({ native: 'manual', nativePath: '/nope/powershell.exe' }, {
+    probe: () => ({ platform: 'linux', wsl: true, available: false, candidates: [], reason: '未找到' }),
+  });
+  t.after(() => h.stop());
+  const result = await within(h.call({ action: 'testNative' }));
+  assert.equal(result.ok, true);
+  assert.equal(result.value.ok, false);
+  assert.equal(result.value.reason.length > 0, true);
 });
