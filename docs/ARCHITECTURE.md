@@ -31,13 +31,13 @@
 | `src/index.js` | Config、Cordis 监听、官方 Connection 路由注册、终端输出、卸载 | 浏览器权限、用户正文 |
 | `src/browser.js` | 浏览器偏好、声音、系统通知、跨标签回执、串行长轮询 | 重新解释 Session 事件 |
 | `src/client.js` | React 控件、组件配置页与会话头部插槽 | 复制播放器实现 |
+| `src/client-scroll.js` | 铃铛弹层分组开合的滚动跟随、手动中断与清理 | 滚动宿主页面或修改宿主 DOM |
+| `src/client-style.js` | 插件局部样式，复用宿主主题变量 | 修改宿主容器或全局样式 |
 | `src/native.js` | 可选的原生系统通知：探测 Windows/WSL 解释器、白名单校验、调 WinRT toast | 替浏览器发声、解释任务语义 |
 
 `src/native.js` 只在宿主侧加载，不进入浏览器 bundle。`scripts/build.mjs` 只生成 dsh 的 ModuleLoader 包装与浏览器 bundle。React 由宿主共享。产物不提交到 Git，但必须包含在 npm 包中。
 
-浏览器设置通过 `plugins.row.config` 注册，键为 `dsh-state-notifier#state-notifier`，仅在 `view: 'page'` 渲染。会话铃铛保留原插槽。两个入口共享提醒实例；页面卸载只释放 React 订阅，插件卸载才停止通知。
-
-插件包通过 `locale/en.json` 与 `locale/zh.json` 的 `meta.detail` 指向 `DETAILS.md`，完整说明保留在 README。
+设置页使用 `plugins.row.config` 的 `dsh-state-notifier#state-notifier` 组件，仅在 `view: 'page'` 渲染。设置页与会话铃铛共享通知及轮询实例。视图卸载清理订阅和滚动资源；插件卸载才停止通知与轮询。
 
 ## 生命周期
 

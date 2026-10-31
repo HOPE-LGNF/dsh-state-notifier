@@ -1,9 +1,31 @@
 import React from 'react';
+import styles from './client-style.js';
+import { followPopoverSections } from './client-scroll.js';
 import { createBrowserNotifier, LABELS, SOUND_PRESET_LABELS, ICON_CHOICES, CUSTOM_ICON, startPolling } from './browser.js';
 
 export const inject = ['slots', 'connection'];
 
-let uploadSeq = 0;
+const h = React.createElement;
+const row = (key, children) => h('div', { key, className: 'dsn-field' }, children);
+const toggle = (key, text, checked, onChange, help) => h('label', { key, className: 'dsn-setting' },
+  h('span', { className: 'dsn-copy' }, h('span', { className: 'dsn-label' }, text), help && h('small', null, help)),
+  h('input', { type: 'checkbox', className: 'dsn-switch', 'aria-label': text, checked, onChange: event => onChange(event.target.checked) }));
+const SECTION_ICONS = {
+  sounds: ['M11 5 6 9H3v6h3l5 4V5Z', 'M15 8a6 6 0 0 1 0 8', 'M18 5a10 10 0 0 1 0 14'],
+  appearance: ['M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9', 'M10 21h4'],
+  native: ['M3 4h18v13H3z', 'M8 21h8', 'M12 17v4'],
+  runtime: ['M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z', 'm9 12 2 2 4-4'],
+};
+const svg = (paths, className) => h('svg', {
+  className, width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+  strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false,
+}, paths.map((d, key) => h('path', { key, d })));
+const collapsible = (key, title, description, children) => h('details', { key, className: 'dsn-section' },
+  h('summary', null,
+    h('span', { className: 'dsn-section-icon' }, svg(SECTION_ICONS[key])),
+    h('span', { className: 'dsn-copy' }, h('strong', null, title), h('small', null, description)),
+    svg(['m6 9 6 6 6-6'], 'dsn-chevron')),
+  h('div', { className: 'dsn-section-body' }, children));
 
 export function apply(ctx) {
   const notifier = createBrowserNotifier(globalThis, sessionId => {
@@ -13,14 +35,6 @@ export function apply(ctx) {
   });
   const polling = startPolling(ctx.connection.rpc, notifier);
   ctx.effect(() => () => { polling.dispose(); notifier.dispose(); });
-  const h = React.createElement;
-  const row = (key, children) => h('div', { key, style: { margin: '6px 0' } }, children);
-  const toggle = (key, text, checked, onChange) => row(key, h('label', { style: { display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' } },
-    h('input', { type: 'checkbox', checked, onChange: event => onChange(event.target.checked) }), text));
-  const collapsible = (key, title, children) => h('details', { key, style: { marginTop: 8, borderTop: '1px solid var(--dsw-alias-border-l2, GrayText)', paddingTop: 6 } },
-    h('summary', { style: { cursor: 'pointer', fontWeight: 600 } }, title),
-    h('div', { style: { padding: '4px 0 0 10px' } }, children));
-
   function Controls({ compact = false }) {
     const [, refresh] = React.useReducer(value => value + 1, 0);
     const [iconError, setIconError] = React.useState('');
@@ -30,9 +44,11 @@ export function apply(ctx) {
     const [testing, setTesting] = React.useState(false);
     const [testResult, setTestResult] = React.useState(null);
     const [manualPath, setManualPath] = React.useState('');
-    const [, setTick] = React.useState(0);
-    const uploadId = React.useRef('');
-    if (!uploadId.current) uploadId.current = `dsh-icon-upload-${++uploadSeq}`;
+    const fileInput = React.useRef(null);
+    const popover = React.useRef(null);
+    React.useEffect(() => {
+      if (compact && popover.current) return ctx.effect(() => followPopoverSections(popover.current));
+    }, [compact]);
     React.useEffect(() => notifier.subscribe(refresh), []);
     const state = notifier.snapshot();
     const p = state.preferences;
@@ -44,7 +60,6 @@ export function apply(ctx) {
       const reader = new FileReader();
       reader.onload = () => {
         setIconError(notifier.setIcon(String(reader.result)) ? '' : '图标未保存：只接受 32KB 以内的 PNG、JPEG、WebP、GIF 或 SVG');
-        setTick(value => value + 1);
       };
       reader.onerror = () => setIconError('图标读取失败');
       reader.readAsDataURL(file);
@@ -85,63 +100,65 @@ export function apply(ctx) {
       catch { setTestResult({ ok: false, reason: '请求失败' }); }
       finally { setTesting(false); }
     };
-    const preview = String(state.icon ?? '').startsWith('data:')
-      ? h('img', { src: state.icon, alt: '自定义图标', width: 16, height: 16, style: { verticalAlign: '-3px' } })
+    const bellIcon = String(state.icon ?? '').startsWith('data:')
+      ? h('img', { src: state.icon, alt: '自定义图标', width: 24, height: 24 })
       : state.icon;
-    const select = (key, label, value, onChange, options) => h('select', { key, value, 'aria-label': label, onChange: event => onChange(event.target.value) },
+    const select = (key, label, value, onChange, options) => h('select', { key, value, className: 'dsn-select', 'aria-label': label, onChange: event => onChange(event.target.value) },
       options.map(([id, text]) => h('option', { key: id, value: id }, text)));
     const presetOptions = Object.entries(SOUND_PRESET_LABELS);
-    const content = h('div', { role: 'group', 'aria-label': '任务状态提醒设置', style: { padding: 12, minWidth: compact ? 280 : 0, maxWidth: compact ? 400 : 760, fontSize: 13, lineHeight: 1.6 } },
-      h('strong', null, preview, ' 任务状态提醒'),
-      toggle('enabled', '启用此浏览器的提醒', p.enabled, value => notifier.update({ enabled: value })),
-      toggle('sound', '播放声音', p.sound, value => { if (value) void notifier.unlockSound(); else notifier.update({ sound: false }); }),
-      p.sound && !state.soundUnlocked && row('unlock', h('button', { type: 'button', onClick: () => { void notifier.unlockSound(); } }, '点击解锁声音（浏览器要求一次点击）')),
-      p.sound && state.soundUnlocked && row('volume', h('label', { style: { display: 'block' } }, `音量 ${Math.round(p.volume * 100)}% `,
-        h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: p.volume, 'aria-label': '提醒音量', onChange: event => notifier.update({ volume: Number(event.target.value) }) }))),
-      toggle('desktop', '显示桌面通知', p.desktop, value => { if (value) void notifier.requestPermission(); else notifier.update({ desktop: false }); }),
-      p.desktop && state.permission === 'default' && row('grant', h('button', { type: 'button', onClick: () => { void notifier.requestPermission(); } }, '点击授权桌面通知')),
-      toggle('quietWhenFocused', '窗口处于前台时静音', p.quietWhenFocused, value => notifier.update({ quietWhenFocused: value })),
-      collapsible('sounds', '声音方案与试听', [
-        row('global', h('label', null, '统一方案 ',
+    const content = h('section', { role: 'group', 'aria-label': '任务状态提醒设置', className: 'dsn-settings', 'data-compact': compact },
+      h('style', null, styles),
+      h('header', { className: 'dsn-heading' },
+        h('div', null, h('h3', null, '任务状态提醒'), h('p', null, '声音、桌面通知与通知外观')),
+        h('span', { className: 'dsn-badge', 'data-enabled': p.enabled }, p.enabled ? '此浏览器已启用' : '此浏览器已关闭')),
+      h('div', { className: 'dsn-basics' },
+        toggle('enabled', '启用此浏览器的提醒', p.enabled, value => notifier.update({ enabled: value }), '声音与浏览器桌面通知的总开关。'),
+        toggle('sound', '播放声音', p.sound, value => { if (value) void notifier.unlockSound(); else notifier.update({ sound: false }); }, '在此设备播放短提示音。'),
+        p.sound && !state.soundUnlocked && row('unlock', h('div', { className: 'dsn-notice' },
+          h('span', null, '浏览器需要一次点击才能播放声音。'),
+          h('button', { className: 'dsn-button', type: 'button', onClick: () => { void notifier.unlockSound(); } }, '点击解锁声音'))),
+        p.sound && state.soundUnlocked && row('volume', h('label', { className: 'dsn-volume' },
+          h('span', null, '提醒音量', h('output', null, `${Math.round(p.volume * 100)}%`)),
+          h('input', { className: 'dsn-range', type: 'range', min: 0, max: 1, step: 0.05, value: p.volume, 'aria-label': '提醒音量', onChange: event => notifier.update({ volume: Number(event.target.value) }) }))),
+        toggle('desktop', '显示桌面通知', p.desktop, value => { if (value) void notifier.requestPermission(); else notifier.update({ desktop: false }); }, '由当前浏览器向系统发送通知。'),
+        p.desktop && state.permission !== 'granted' && row('grant', h('div', { className: 'dsn-notice' },
+          h('span', null, state.desktopStatus),
+          state.permission === 'default' && h('button', { className: 'dsn-button', type: 'button', onClick: () => { void notifier.requestPermission(); } }, '点击授权桌面通知'))),
+        toggle('quietWhenFocused', '窗口处于前台时静音', p.quietWhenFocused, value => notifier.update({ quietWhenFocused: value }), '关注当前窗口时，暂停浏览器提醒。')),
+      collapsible('sounds', '声音方案与试听', '为五类事件选择不同的提示音', [
+        row('global', h('label', { className: 'dsn-sound-row' }, h('span', null, '统一声音方案'),
           select('global-preset', '统一声音方案', '', preset => {
             if (preset) notifier.update({ sounds: Object.fromEntries(Object.keys(LABELS).map(kind => [kind, preset])) });
-          }, [['', '选择以应用到全部'], ...presetOptions]))),
-        ...Object.entries(LABELS).map(([kind, text]) => row(`sound-${kind}`, h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
-          h('span', { style: { flex: '0 0 74px' } }, text),
-          select(`preset-${kind}`, `${text}声音`, p.sounds[kind], preset => notifier.update({ sounds: { ...p.sounds, [kind]: preset } }), presetOptions),
-          h('button', { type: 'button', onClick: () => { void notifier.enableSound(kind); } }, '试听')))),
-        h('small', { key: 'note' }, `可选方案：${Object.values(SOUND_PRESET_LABELS).join('、')}。全部为本机合成的短音，不读取任何文件。`),
+          }, [['', '应用到全部…'], ...presetOptions]))),
+        ...Object.entries(LABELS).map(([kind, text]) => h('div', { key: kind, className: 'dsn-sound-row' },
+          h('span', null, text), h('div', { className: 'dsn-actions' },
+            select(`preset-${kind}`, `${text}声音`, p.sounds[kind], preset => notifier.update({ sounds: { ...p.sounds, [kind]: preset } }), presetOptions),
+            h('button', { className: 'dsn-button', type: 'button', 'aria-label': `试听${text}`, onClick: () => { void notifier.enableSound(kind); } }, '试听')))),
+        h('small', { key: 'note' }, '所有声音均在本机合成，无需下载素材。'),
       ]),
-      collapsible('appearance', '通知外观', [
-        row('icon', h('div', null,
-          h('div', null, '铃铛图标'),
-          h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 } },
-            ICON_CHOICES.map(icon => h('button', {
-              key: icon, type: 'button', 'aria-pressed': p.icon === icon,
-              style: { fontSize: 16, padding: '2px 6px', outline: p.icon === icon ? '2px solid var(--dsw-alias-brand-primary, Highlight)' : 'none' },
-              onClick: () => notifier.update({ icon, iconData: '' }),
-            }, icon))))),
+      collapsible('appearance', '通知外观', '图标、会话名称与提问内容', [
+        row('icon', h('div', null, h('span', { className: 'dsn-label' }, '铃铛图标'),
+          h('div', { className: 'dsn-icons' }, ICON_CHOICES.map(choice => h('button', {
+            key: choice, type: 'button', className: 'dsn-icon', 'aria-label': `使用 ${choice} 图标`, 'aria-pressed': p.icon === choice,
+            onClick: () => { notifier.update({ icon: choice, iconData: '' }); setIconName(''); setIconError(''); },
+          }, choice))))),
         row('upload', h('div', null,
-          h('div', null, '自定义图标（仅保存在本机）'),
-          h('input', {
-            id: uploadId.current, type: 'file', style: { display: 'none' },
-            accept: 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml', 'aria-label': '上传自定义图标', onChange: onIconFile,
-          }),
-          h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-            h('label', { htmlFor: uploadId.current, role: 'button', tabIndex: 0, style: { cursor: 'pointer', border: '1px solid var(--dsw-alias-border-l2, GrayText)', borderRadius: 6, padding: '2px 10px' } }, '选择图标文件'),
-            h('span', { style: { opacity: 0.7 } }, iconName || (p.icon === CUSTOM_ICON ? '已使用自定义图标' : '未选择文件')),
-            p.icon === CUSTOM_ICON && h('button', { type: 'button', onClick: () => { notifier.update({ icon: ICON_CHOICES[0], iconData: '' }); setIconName(''); } }, '清除')),
-          iconError && h('div', { role: 'alert', style: { color: 'var(--dsw-alias-label-error, #c00)' } }, iconError))),
-        toggle('title', '通知中显示会话标题（默认只显示会话短标识）', p.showSessionTitle, value => notifier.update({ showSessionTitle: value })),
-        toggle('question', '显示提问的问题（默认开启）', p.showQuestion, value => notifier.update({ showQuestion: value })),
-        h('small', { key: 'question-note' }, '关闭后，提问正文不会随订阅发给浏览器，通知只显示分类与会话标识。'),
+          h('input', { ref: fileInput, type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml', 'aria-label': '上传自定义图标', onChange: onIconFile }),
+          h('div', { className: 'dsn-actions' },
+            h('button', { className: 'dsn-button', type: 'button', onClick: () => fileInput.current?.click() }, '选择图标文件'),
+            h('span', { className: 'dsn-file-name' }, iconName || (p.icon === CUSTOM_ICON ? '已使用自定义图标' : '未选择文件')),
+            p.icon === CUSTOM_ICON && h('button', { className: 'dsn-button', type: 'button', onClick: () => { notifier.update({ icon: ICON_CHOICES[0], iconData: '' }); setIconName(''); setIconError(''); } }, '清除')),
+          h('small', null, '最大 32KB · PNG、JPEG、WebP、GIF 或 SVG · 仅保存在本机'),
+          iconError && h('p', { role: 'alert', className: 'dsn-error' }, iconError))),
+        toggle('title', '显示会话标题', p.showSessionTitle, value => notifier.update({ showSessionTitle: value }), '用会话名称代替简短标识。'),
+        toggle('question', '显示提问的问题', p.showQuestion, value => notifier.update({ showQuestion: value }), '关闭后，提问正文不会发送到此浏览器。'),
       ]),
-      collapsible('native', '系统通知穿透（实验性）', [
-        row('mode', h('label', null, '模式 ',
+      collapsible('native', '系统通知穿透', '实验性 · 由宿主发送，仅 Windows / WSL', [
+        row('mode', h('label', { className: 'dsn-sound-row' }, h('span', null, '穿透模式'),
           select('native-mode', '穿透模式', native?.mode ?? 'off', mode => { void applyNative(mode, manualPath); },
             [['off', '关闭'], ['auto', '自动探测'], ['manual', '手动指定']]))),
-        row('probe', h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
-          h('button', { type: 'button', onClick: () => { void runProbe(); }, disabled: probing }, probing ? '检测中…' : '检测环境'),
+        row('probe', h('div', { className: 'dsn-actions' },
+          h('button', { className: 'dsn-button', type: 'button', onClick: () => { void runProbe(); }, disabled: probing }, probing ? '检测中…' : '检测环境'),
           h('span', { style: { opacity: 0.8 } },
             !native ? '尚未检测'
               : native.available ? `可用（${native.wsl ? 'WSL' : native.platform}，${native.candidates?.length ?? 0} 个候选）`
@@ -150,35 +167,37 @@ export function apply(ctx) {
           h('div', { style: { opacity: 0.8 } }, '探测到的解释器'),
           h('ul', { style: { margin: '2px 0 0 16px', padding: 0 } },
             native.candidates.slice(0, 4).map(path => h('li', { key: path, style: { wordBreak: 'break-all' } }, path))))) : null,
-        (native?.mode === 'manual' || (native?.mode ?? 'off') === 'manual') && row('manual', h('div', null,
+        native?.mode === 'manual' && row('manual', h('div', null,
           h('div', null, '解释器绝对路径'),
           h('div', { style: { display: 'flex', gap: 6, marginTop: 4 } },
             h('input', {
-              type: 'text', value: manualPath, 'aria-label': '解释器绝对路径', placeholder: '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+              className: 'dsn-text', type: 'text', value: manualPath, 'aria-label': '解释器绝对路径', placeholder: '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
               style: { flex: 1, minWidth: 0 }, onChange: event => setManualPath(event.target.value),
             }),
-            h('button', { type: 'button', onClick: () => { void applyNative('manual', manualPath); } }, '应用')))) ,
-        row('test', h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
-          h('button', { type: 'button', onClick: () => { void runTest(); }, disabled: testing }, testing ? '发送中…' : '发送测试通知'),
-          testResult && h('span', { style: { opacity: 0.85 } },
+            h('button', { className: 'dsn-button', type: 'button', onClick: () => { void applyNative('manual', manualPath); } }, '应用')))) ,
+        row('test', h('div', { className: 'dsn-actions' },
+          h('button', { className: 'dsn-button', type: 'button', onClick: () => { void runTest(); }, disabled: testing }, testing ? '发送中…' : '发送测试通知'),
+          testResult && h('span', { role: 'status', className: testResult.ok ? 'dsn-help' : 'dsn-error' },
             testResult.ok ? `已发出 · ${STATE_TEXT[testResult.state] ?? STATE_TEXT.unknown}` : `失败：${testResult.reason ?? '未知'}`))),
         row('hint', h('small', null,
-          '绕过浏览器与专注助手的限制，在全屏、免打扰下也能显示。仅 Windows 与 WSL；只接受 powershell.exe 或 pwsh.exe。'
+          '通知由宿主发送，只接受 powershell.exe 或 pwsh.exe。'
           + '模式改动立即生效，重启后回到 profile 配置的 native 值。')),
         row('allow', h('small', null,
           '首次启用时 Windows 可能询问是否允许此应用发送通知，请选择允许。若曾关闭，可在“设置 → 系统 → 通知”里重新打开；'
           + '插件不会尝试绕过这个决定。')),
       ]),
-      collapsible('runtime', '权限及运行信息', [
-        ...[state.soundStatus, state.desktopStatus, state.storageStatus, state.tabStatus, state.transport, state.resetMessage, state.navigationError]
-          .filter(Boolean).map(text => h('div', { key: text }, text)),
-        h('div', { key: 'playback' }, `主机输出策略：${{ auto: '自动', browser: '浏览器', terminal: '终端', none: '关闭' }[state.playback]}`),
-        h('small', { key: 'privacy' }, '此处偏好仅适用于本机同源浏览器。全局分类、完成耗时门槛和输出策略由主机配置决定。上传图标保存在本机 localStorage，不发送到宿主。'),
+      collapsible('runtime', '权限及运行信息', '浏览器状态、连接与宿主输出策略', [
+        h('dl', { key: 'status', className: 'dsn-runtime' }, [
+          ['连接', state.transport], ['声音', state.soundStatus], ['桌面通知', state.desktopStatus], ['多标签页', state.tabStatus],
+          ['宿主输出策略', { auto: '自动', browser: '浏览器', terminal: '终端', none: '关闭' }[state.playback]],
+        ].map(([label, value]) => h('div', { key: label }, h('dt', null, label), h('dd', null, value)))),
+        ...[state.storageStatus, state.resetMessage, state.navigationError].filter(Boolean).map(text => h('p', { key: text, className: 'dsn-notice' }, text)),
       ]),
+      h('p', { className: 'dsn-footnote' }, '浏览器偏好即时保存，并同步到同一网站的其他标签页。全局事件与输出策略由宿主配置决定。'),
     );
-    return compact ? h('details', { style: { position: 'relative' } },
-      h('summary', { 'aria-label': '任务状态提醒', title: '任务状态提醒', style: { cursor: 'pointer', listStyle: 'none', padding: '4px 8px' } }, p.enabled ? preview : '🔕'),
-      h('div', { style: { position: 'absolute', zIndex: 100, right: 0, maxHeight: 'min(72vh, 640px)', overflowY: 'auto', overscrollBehavior: 'contain', background: 'var(--dsw-alias-bg-layer-2, Canvas)', color: 'var(--dsw-alias-label-primary, CanvasText)', border: '1px solid var(--dsw-alias-border-l2, GrayText)', borderRadius: 8, boxShadow: '0 4px 16px #0003' } }, content)) : content;
+    return compact ? h('details', { className: 'dsn-bell' },
+      h('summary', { 'aria-label': '任务状态提醒', title: '任务状态提醒' }, p.enabled ? bellIcon : '🔕'),
+      h('div', { ref: popover, className: 'dsn-popover' }, content)) : content;
   }
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities', id: 'state-notifier', order: 90,

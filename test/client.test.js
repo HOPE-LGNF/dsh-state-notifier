@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
-const bundle = await build({ entryPoints: [new URL('../src/client.js', import.meta.url).pathname], bundle: true, write: false, format: 'cjs', platform: 'browser', external: ['react'] });
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/client.js', import.meta.url))], bundle: true, write: false, format: 'cjs', platform: 'browser', external: ['react'] });
 
 function harness({ componentSlot = true } = {}) {
   const entries = new Map();
