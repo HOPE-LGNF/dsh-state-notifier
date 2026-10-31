@@ -2,7 +2,7 @@
 
 本页说明运行方法。已有结果与待完成事项见[项目状态](STATUS.md)。脚本需要已安装的 Playwright 和浏览器，不增加插件依赖。
 
-组件入口检查使用支持 `plugins.row.config` 的宿主。检查通用设置与包介绍页不显示面板，组件页关闭重开后偏好与声音解锁状态保留。简短介绍应能打开完整文档。旧宿主若不支持组件插槽，仍可使用会话铃铛。
+组件入口检查使用支持 `plugins.row.config` 的宿主。从“包含的组件”进入配置页，检查关闭重开后偏好与声音解锁状态保留。简短介绍应能打开完整文档。旧宿主若不支持组件插槽，仍可使用会话铃铛。
 
 ## 浏览器夹具
 
@@ -15,6 +15,20 @@ PLAYWRIGHT_MODULE="$HOME/path/to/playwright/index.js" node scripts/browser-smoke
 将模块路径替换为本机路径。环境能直接解析 `playwright` 时，可省略该变量。`PLAYWRIGHT_CHANNEL` 默认为 `chrome`，也可设为已安装的 `msedge`；没有系统 Chrome 时用 `chromium`（Playwright 自带）。
 
 脚本使用临时浏览器上下文，结束后关闭浏览器。具体检查项见 [browser-smoke.mjs](../scripts/browser-smoke.mjs)。上下文会显式授予通知权限；API 调用成功不证明系统弹窗可见或声音可听。
+
+## 设置界面夹具
+
+`ui-smoke.mjs` 使用真实 React 和浏览器提醒模块，模拟宿主插槽与 RPC，不启动 dsh。复用已安装的 React、React DOM 与 Playwright，不给插件增加运行依赖：
+
+```bash
+UI_REACT_MODULES="/path/to/node_modules" \
+PLAYWRIGHT_MODULE="/path/to/playwright/index.mjs" \
+node scripts/ui-smoke.mjs
+```
+
+`UI_REACT_MODULES` 指向同时可解析 `react` 和 `react-dom` 的目录。截图和结果写入 `artifacts/ui/`，可用 `UI_ARTIFACTS` 更换路径。
+
+检查覆盖组件入口、关闭重开、偏好保留、键盘开关与音量、五类试听、图标上传、原生通知控件请求及等待状态。亮暗主题使用宿主语义变量的夹具值；1440px 与 390px 截图不代表完整宿主验收。铃铛展开后应无横向溢出，并可滚动到底。
 
 ## 完整 dsh Web
 
