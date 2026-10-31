@@ -436,3 +436,16 @@ test('正文开关变化会重启订阅并按新约定请求', async () => {
   assert.deepEqual(calls.at(-1).cursor, { epoch: 'epoch', seq: 0 }, '重订阅沿用游标，不重放历史');
   polling.dispose(); n.dispose(); await polling.done;
 });
+
+test('宿主已发原生通知时浏览器只发声，不重复弹桌面通知', async () => {
+  const h = harness();
+  const n = createBrowserNotifier(h.env);
+  await n.enableSound();
+  const before = h.starts();
+  await n.deliver({ ...event, id: 'native:1', native: true });
+  assert.equal(h.starts() > before, true, '声音仍由浏览器负责');
+  assert.equal(h.shown.length, 0, '桌面通知已交由宿主，浏览器不得重复弹');
+  await n.deliver({ ...event, id: 'native:2' });
+  assert.equal(h.shown.length, 1, '没有原生标记时仍由浏览器弹');
+  n.dispose();
+});

@@ -15,6 +15,8 @@
               ↓
      官方 Connection 受认证长轮询
               ↓
+     native.js（可选）──→ Windows 原生 toast
+              ↓
        browser.js 浏览器输出
               ↑
         client.js 官方插槽
@@ -29,8 +31,9 @@
 | `src/index.js` | Config、Cordis 监听、官方 Connection 路由注册、终端输出、卸载 | 浏览器权限、用户正文 |
 | `src/browser.js` | 浏览器偏好、声音、系统通知、跨标签回执、串行长轮询 | 重新解释 Session 事件 |
 | `src/client.js` | React 控件、设置与会话头部插槽 | 复制播放器实现 |
+| `src/native.js` | 可选的原生系统通知：探测 Windows/WSL 解释器、白名单校验、调 WinRT toast | 替浏览器发声、解释任务语义 |
 
-`scripts/build.mjs` 只生成 dsh 的 ModuleLoader 包装与浏览器 bundle。React 由宿主共享。产物不提交到 Git，但必须包含在 npm 包中。
+`src/native.js` 只在宿主侧加载，不进入浏览器 bundle。`scripts/build.mjs` 只生成 dsh 的 ModuleLoader 包装与浏览器 bundle。React 由宿主共享。产物不提交到 Git，但必须包含在 npm 包中。
 
 ## 生命周期
 
@@ -48,6 +51,8 @@ Cordis 注册的监听和依赖由框架回收。手工定时器、等待请求�
 
 请求含 `clientId`、`browserReady`、`cursor`。游标为空时只取得当前基线。后续游标为 `{ epoch, seq }`。响应含 `epoch`、`cursor`、`reset`、`notices` 和 `playback`。
 
+同一路由还接受两个控制动作：`action: 'probe'` 返回探测结果与解析状态；`action: 'setNative'` 切换运行时穿透模式。两者都不进入 journal。
+
 `content` 是可选的布尔参数。设为 `true` 时，通知可包含 `question` 字段。省略或设为 `false` 时，响应不含该字段。宿主拒绝非布尔值。此参数不控制会话显示名。
 
 - 有新通知时立即返回。
@@ -64,6 +69,8 @@ Cordis 注册的监听和依赖由框架回收。手工定时器、等待请求�
 ## 浏览器与终端的选择
 
 客户端每次订阅更新一次就绪状态。就绪表示至少一种输出当前可用：声音已解锁，或系统通知已获准。宿主的租约有效期为 35 秒。`auto` 在没有有效就绪租约时使用 BEL。
+
+原生通道开启且解析成功时，系统通知由宿主发出，通知带 `native: true`；浏览器读到后只发声、不再弹桌面通知，避免同一条出现两次。原生发送失败只记录状态，不回退补发。
 
 租约不是确认协议。页面突然退出后，最多可能有 35 秒仍被认为就绪。页面隐藏后的计时器节流或冻结也可能延迟接收。当前实现不增加确认重试或后台 Push 服务。后续若需要可靠到达，应先定义时效、重试和隐私要求。
 

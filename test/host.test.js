@@ -77,6 +77,8 @@ async function boot(config = {}, output = {}) {
         write: value => { writes.push(String(value)); return output.write?.(value); },
         warn: value => { warnings.push(String(value)); return output.warn?.(value); },
         isTTY: output.isTTY ?? (() => true),
+        probe: output.probe,
+        notify: output.notify,
       });
     },
   });
@@ -342,4 +344,63 @@ test('Host：真实 Session 的提问正文只按客户端请求返回', async t
   const on = await within(h.call({ ...request(cursor), content: true }));
   assert.equal(on.value.notices[0].question, '数据库：选 MySQL 还是 Postgres？');
   assert.equal(on.value.notices[0].sessionId, h.session.id);
+});
+
+test('Host：穿透模式可切换，非法模式被拒绝', async t => {
+  const h = await boot();
+  t.after(() => h.stop());
+  const off = await within(h.call({ action: 'setNative', mode: 'off' }));
+  assert.equal(off.ok, true);
+  assert.equal(off.value.mode, 'off');
+  const bad = await within(h.call({ action: 'setNative', mode: 'always-on' }));
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error.code, 'bad-request');
+  const auto = await within(h.call({ action: 'setNative', mode: 'auto', path: '' }));
+  assert.equal(auto.ok, true);
+  assert.equal(auto.value.mode, 'auto');
+  assert.equal(typeof auto.value.resolved, 'object');
+});
+
+test('Host：探测动作返回可用性与候选，不抛错', async t => {
+  const h = await boot();
+  t.after(() => h.stop());
+  const probe = await within(h.call({ action: 'probe' }), 15000);
+  assert.equal(probe.ok, true);
+  assert.equal(typeof probe.value.available, 'boolean');
+  assert.equal(Array.isArray(probe.value.candidates), true);
+  assert.equal(typeof probe.value.mode, 'string');
+  if (!probe.value.available) assert.equal(probe.value.reason.length > 0, true, '不可用必须给出原因');
+});
+
+test('Host：开启穿透后审批走原生发送，通知标记 native 且浏览器不再弹', async t => {
+  const sent = [];
+  const h = await boot({ native: 'auto', playback: 'none' }, {
+    probe: () => ({ platform: 'win32', wsl: false, available: true, candidates: ['/fake/powershell.exe'], reason: '' }),
+    notify: async (path, text) => { sent.push({ path, text }); return { ok: true }; },
+  });
+  t.after(() => h.stop());
+  const baseline = await within(h.call(request()));
+  const cursor = cursorOf(baseline.value);
+  h.approval();
+  await delay(30);
+  assert.equal(sent.length, 1, '审批必须触发一次原生发送');
+  assert.equal(sent[0].path, '/fake/powershell.exe');
+  assert.equal(sent[0].text.title.includes('等待审批'), true);
+  assert.equal(sent[0].text.body.startsWith('会话 '), true);
+  const next = await within(h.call({ ...request(cursor), content: true }));
+  assert.equal(next.value.notices.length, 1);
+  assert.equal(next.value.notices[0].native, true, '浏览器据此只发声');
+  assert.equal('question' in next.value.notices[0], false, '审批没有提问正文');
+});
+
+test('Host：穿透关闭时不调用原生，通知不带 native 标记', async t => {
+  let calls = 0;
+  const h = await boot({ native: 'off' }, { notify: async () => { calls++; return { ok: true }; } });
+  t.after(() => h.stop());
+  const baseline = await within(h.call(request()));
+  h.approval();
+  await delay(30);
+  assert.equal(calls, 0);
+  const next = await within(h.call({ ...request(cursorOf(baseline.value)) }));
+  assert.equal(next.value.notices[0].native, false);
 });

@@ -18,6 +18,7 @@
     "src/index.js",
     "src/core.js",
     "src/journal.js",
+    "src/native.js",
     "dist/client.js",
     "cordis.patch.yml",
     "README.md",

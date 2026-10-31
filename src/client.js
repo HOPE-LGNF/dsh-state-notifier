@@ -25,6 +25,9 @@ export function apply(ctx) {
     const [, refresh] = React.useReducer(value => value + 1, 0);
     const [iconError, setIconError] = React.useState('');
     const [iconName, setIconName] = React.useState('');
+    const [native, setNative] = React.useState(null);
+    const [probing, setProbing] = React.useState(false);
+    const [manualPath, setManualPath] = React.useState('');
     const [, setTick] = React.useState(0);
     const uploadId = React.useRef('');
     if (!uploadId.current) uploadId.current = `dsh-icon-upload-${++uploadSeq}`;
@@ -43,6 +46,28 @@ export function apply(ctx) {
       };
       reader.onerror = () => setIconError('图标读取失败');
       reader.readAsDataURL(file);
+    };
+    const callHost = async payload => {
+      const controller = new AbortController();
+      const result = await ctx.connection.rpc.call('/api', 'state-notifier', payload, controller.signal);
+      if (!result?.ok) throw new Error(result?.error?.message || '请求失败');
+      return result.value;
+    };
+    const runProbe = async () => {
+      setProbing(true);
+      try {
+        const value = await callHost({ action: 'probe' });
+        setNative(value);
+        if (value.path) setManualPath(value.path);
+      } catch { setNative({ available: false, reason: '探测请求失败' }); }
+      finally { setProbing(false); }
+    };
+    const applyNative = async (mode, path) => {
+      try {
+        const value = await callHost({ action: 'setNative', mode, path });
+        setNative(current => ({ ...(current ?? {}), ...value, available: value.detected?.available ?? current?.available }));
+        if (value.path) setManualPath(value.path);
+      } catch { /* 失败由下一次探测暴露 */ }
     };
     const preview = String(state.icon ?? '').startsWith('data:')
       ? h('img', { src: state.icon, alt: '自定义图标', width: 16, height: 16, style: { verticalAlign: '-3px' } })
@@ -94,6 +119,32 @@ export function apply(ctx) {
         toggle('title', '通知中显示会话标题（默认只显示会话短标识）', p.showSessionTitle, value => notifier.update({ showSessionTitle: value })),
         toggle('question', '显示提问的问题（默认开启）', p.showQuestion, value => notifier.update({ showQuestion: value })),
         h('small', { key: 'question-note' }, '关闭后，提问正文不会随订阅发给浏览器，通知只显示分类与会话标识。'),
+      ]),
+      collapsible('native', '系统通知穿透（实验性）', [
+        row('mode', h('label', null, '模式 ',
+          select('native-mode', '穿透模式', native?.mode ?? 'off', mode => { void applyNative(mode, manualPath); },
+            [['off', '关闭'], ['auto', '自动探测'], ['manual', '手动指定']]))),
+        row('probe', h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+          h('button', { type: 'button', onClick: () => { void runProbe(); }, disabled: probing }, probing ? '检测中…' : '检测环境'),
+          h('span', { style: { opacity: 0.8 } },
+            !native ? '尚未检测'
+              : native.available ? `可用（${native.wsl ? 'WSL' : native.platform}，${native.candidates?.length ?? 0} 个候选）`
+                : `不可用：${native.reason || '未知原因'}`))),
+        native?.candidates?.length ? row('candidates', h('div', null,
+          h('div', { style: { opacity: 0.8 } }, '探测到的解释器'),
+          h('ul', { style: { margin: '2px 0 0 16px', padding: 0 } },
+            native.candidates.slice(0, 4).map(path => h('li', { key: path, style: { wordBreak: 'break-all' } }, path))))) : null,
+        (native?.mode === 'manual' || (native?.mode ?? 'off') === 'manual') && row('manual', h('div', null,
+          h('div', null, '解释器绝对路径'),
+          h('div', { style: { display: 'flex', gap: 6, marginTop: 4 } },
+            h('input', {
+              type: 'text', value: manualPath, 'aria-label': '解释器绝对路径', placeholder: '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+              style: { flex: 1, minWidth: 0 }, onChange: event => setManualPath(event.target.value),
+            }),
+            h('button', { type: 'button', onClick: () => { void applyNative('manual', manualPath); } }, '应用')))) ,
+        row('hint', h('small', null,
+          '绕过浏览器与专注助手的限制，在全屏、免打扰下也能显示。仅 Windows 与 WSL；只接受 powershell.exe 或 pwsh.exe。'
+          + '模式改动立即生效，重启后回到 profile 配置的 native 值。')),
       ]),
       collapsible('runtime', '权限及运行信息', [
         ...[state.soundStatus, state.desktopStatus, state.storageStatus, state.tabStatus, state.transport, state.resetMessage, state.navigationError]

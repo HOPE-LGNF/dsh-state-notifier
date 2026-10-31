@@ -301,7 +301,8 @@ export function createBrowserNotifier(env = globalThis, openSession = () => {}) 
       const receipt = receipts.find(row => row.id === notice.id) || { id: notice.id, sound: false, desktop: false };
       let changed = false;
       if (!receipt.sound && soundReady() && play(notice.kind)) { receipt.sound = true; changed = true; }
-      if (!receipt.desktop && desktopReady() && desktop(notice)) { receipt.desktop = true; changed = true; }
+      // 宿主已发原生通知时只发声，避免同一条弹两次。
+      if (!receipt.desktop && notice.native !== true && desktopReady() && desktop(notice)) { receipt.desktop = true; changed = true; }
       if (changed) {
         try { env.localStorage.setItem(RECEIPTS_KEY, JSON.stringify([...receipts.filter(row => row.id !== notice.id), receipt].slice(-256))); }
         catch { storageAvailable = false; publish(); }
