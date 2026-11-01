@@ -70,35 +70,41 @@ flowchart LR
 
 装到范围外的 dsh 上会被插件管理器拒绝；需要时可逐版本豁免。
 
+### 从 npm 安装（推荐）
+
+```bash
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-state-notifier
+npx @deepseek-ai/dsh@0.2.0-rc.2 web
+```
+
+插件发布在 [npm](https://www.npmjs.com/package/dsh-state-notifier)，默认安装当前 `latest`。包内自带浏览器产物，无需本地构建；npm 安装也跳过 pnpm 的构建授权步骤。
+
+### 从 Release 附件安装
+
+不使用 npm 时，可安装 GitHub Release 附件，同样自带产物：
+
+```bash
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
+  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.6.1/dsh-state-notifier-0.6.1.tgz"
+npx @deepseek-ai/dsh@0.2.0-rc.2 web
+```
+
 ### 从源码构建
+
+只有修改源码时需要：
 
 ```bash
 npm ci
 npm run check
 npm pack
-```
-
-### 安装到 web profile
-
-以下命令使用固定的已测版本，并在仓库根目录执行（`$PWD` 指向该目录）：
-
-```bash
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.6.0.tgz"
-npx @deepseek-ai/dsh@0.2.0-rc.2 web
-```
-
-不在本仓库时，直接装 GitHub Release 附件。它自带浏览器产物，无需本地构建：
-
-```bash
-npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
-  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.6.0/dsh-state-notifier-0.6.0.tgz"
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add "$PWD/dsh-state-notifier-0.6.1.tgz"
 ```
 
 > [!WARNING]
 > **不要用 Git 地址安装**（插件界面的仓库 URL 或 `github:owner/repo`）。
 > 浏览器产物 `dist/client.js` 不随 Git 分发：pnpm ≥10 默认阻止构建脚本，而放行所需的键包含提交号，每次更新都会变。
 > 用 Git 地址时，安装要么被 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 拒绝，要么装上后因缺少该文件而启动失败。
-> 请使用上面的 tgz 或 Release 附件。
+> 请使用上面的 npm 包名、tgz 或 Release 附件。
 
 ## 启用浏览器提醒
 
@@ -156,15 +162,26 @@ Windows 通知由 **Windows 上打开 dsh 页面的浏览器**发送，dsh 宿�
 
 ## 更新与卸载
 
-插件按 GitHub Release 附件分发，**版本号包含在 URL 里**。换版本时先卸载再安装：
+### 从 npm 更新
+
+```bash
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-state-notifier
+npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add dsh-state-notifier
+```
+
+`dsh plugin add` 记录的是一条 semver 范围（例如 `^0.6.1`），同一范围内重复 `add` 不会升级。换版本时先 `remove`，或用 `add dsh-state-notifier@0.6.1` 指定版本。
+
+### 从 Release 附件更新
+
+附件安装时**版本号包含在 URL 里**。换版本时先卸载，再安装新的 URL：
 
 ```bash
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web remove dsh-state-notifier
 npx @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add \
-  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.6.0/dsh-state-notifier-0.6.0.tgz"
+  "https://github.com/HOPE-LGNF/dsh-state-notifier/releases/download/v0.6.1/dsh-state-notifier-0.6.1.tgz"
 ```
 
-直接对同一个旧 URL 重复 `add` 不会更新，因为 pnpm 认为该规格已满足。换版本必须让 URL 变，或先 `remove`。
+对同一个旧 URL 重复 `add` 不会更新，因为 pnpm 认为该规格已满足。
 
 升级 dsh 本体后先核对版本门。插件声明 `>=0.2.0-rc.2 <0.3.0-0 || >=0.2.1-0 <0.3.0-0 || >=0.2.2-0 <0.3.0-0`，覆盖 0.2.x 的全部预发布版；超出范围会被拒绝安装，需要时用 `dsh plugin allow-version` 逐版本豁免。
 
