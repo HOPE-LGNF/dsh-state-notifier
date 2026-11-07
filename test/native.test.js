@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ALLOWED_EXECUTABLES, probe, resolveExecutable } from '../src/native.js';
+import { ALLOWED_EXECUTABLES, browserBrand, detectBrowserElevation, probe, resolveExecutable } from '../src/native.js';
 
 // 探测结果只依赖文件系统与环境，测试用构造值，避免依赖运行机器是否为 WSL。
 const detected = (overrides = {}) => ({
@@ -73,4 +73,32 @@ test('候选去重、路径规范，且系统 PowerShell 5.1 优先于 pwsh', ()
   if (lowered.some(path => path.endsWith('powershell.exe'))) {
     assert.equal(lowered[0].endsWith('powershell.exe'), true, 'PowerShell 7 缺少 WinRT 投影，必须让 5.1 优先');
   }
+});
+
+test('从 User-Agent 识别浏览器品牌，Edge 必须先于 Chrome', () => {
+  const edge = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0';
+  const chrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36';
+  const firefox = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0';
+  assert.deepEqual(browserBrand(edge), { brand: 'edge', process: 'msedge' }, 'Edge 的 UA 也含 Chrome/');
+  assert.deepEqual(browserBrand(chrome), { brand: 'chrome', process: 'chrome' });
+  assert.deepEqual(browserBrand(firefox), { brand: 'firefox', process: 'firefox' });
+  assert.equal(browserBrand('curl/8.0'), null);
+  assert.equal(browserBrand(''), null);
+  assert.equal(browserBrand(undefined), null);
+});
+
+test('提权检测拒绝白名单外的解释器与未知品牌，不执行任何进程', async () => {
+  for (const [exe, brand] of [['/usr/bin/bash', 'edge'], ['/mnt/c/x/powershell.exe', 'safari']]) {
+    const r = await detectBrowserElevation(exe, brand);
+    assert.equal(r.supported, false);
+    assert.equal(typeof r.reason, 'string');
+  }
+});
+
+test('扩展品牌识别：Opera / Vivaldi / Brave 不会被误判为 Chrome', () => {
+  const base = (tag) => `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36 ${tag}`;
+  assert.equal(browserBrand(base('OPR/120.0.0.0')).brand, 'opera');
+  assert.equal(browserBrand(base('Vivaldi/7.0')).brand, 'vivaldi');
+  assert.equal(browserBrand(base('Brave/1.70')).brand, 'brave');
+  assert.equal(browserBrand(base('')).brand, 'chrome');
 });

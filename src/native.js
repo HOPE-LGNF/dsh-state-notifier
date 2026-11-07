@@ -173,6 +173,81 @@ try {
   exit 1
 }`;
 
+
+/** 从 User-Agent 推断浏览器品牌与进程名；不可识别时返回 null。 */
+export function browserBrand(userAgent) {
+  const ua = String(userAgent ?? '');
+  // 先判断带自有标记的品牌：它们的 UA 同时包含 Chrome/。
+  if (/Edg\//.test(ua)) return { brand: 'edge', process: 'msedge' };
+  if (/OPR\//.test(ua)) return { brand: 'opera', process: 'opera' };
+  if (/Vivaldi\//.test(ua)) return { brand: 'vivaldi', process: 'vivaldi' };
+  if (/Brave\//.test(ua)) return { brand: 'brave', process: 'brave' };
+  if (/Firefox\//.test(ua)) return { brand: 'firefox', process: 'firefox' };
+  if (/Chrome\//.test(ua)) return { brand: 'chrome', process: 'chrome' };
+  return null;
+}
+
+/** 查询进程令牌的 elevation；只读进程名与令牌位，不读命令行或窗口标题。 */
+const ELEVATION_SCRIPT = `$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class DshElevation {
+  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(int access, bool inherit, int pid);
+  [DllImport("advapi32.dll", SetLastError=true)] static extern bool OpenProcessToken(IntPtr h, uint access, out IntPtr token);
+  [DllImport("advapi32.dll", SetLastError=true)] static extern bool GetTokenInformation(IntPtr token, int cls, out int info, int len, out int ret);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+  public static int Check(int pid) {
+    IntPtr h = OpenProcess(0x1000, false, pid);
+    if (h == IntPtr.Zero) return -1;
+    IntPtr t;
+    if (!OpenProcessToken(h, 0x0008, out t)) { CloseHandle(h); return -1; }
+    int info, ret;
+    bool ok = GetTokenInformation(t, 20, out info, 4, out ret);
+    CloseHandle(t); CloseHandle(h);
+    return ok ? (info != 0 ? 1 : 0) : -1;
+  }
+}
+"@
+$procs = Get-Process -Name '__PROCESS__' -ErrorAction SilentlyContinue
+if (-not $procs) { Write-Output 'RESULT {"total":0,"elevated":0,"unknown":0}'; exit }
+$elevated = 0
+$unknown = 0
+foreach ($p in $procs) {
+  $r = [DshElevation]::Check($p.Id)
+  if ($r -eq 1) { $elevated++ } elseif ($r -eq -1) { $unknown++ }
+}
+Write-Output ('RESULT {"total":' + $procs.Count + ',"elevated":' + $elevated + ',"unknown":' + $unknown + '}')
+`;
+
+/**
+ * 检测某品牌浏览器进程是否存在提权实例。永不抛错。
+ * @returns {Promise<{supported: true, brand: string, total: number, elevated: number, unknown: number} | {supported: false, reason: string}>}
+ */
+export function detectBrowserElevation(executable, brand) {
+  return new Promise(resolve => {
+    if (!isAllowed(executable)) { resolve({ supported: false, reason: '解释器不在白名单内' }); return; }
+    // 进程名来自白名单映射，不拼接任意输入。
+    const process = { edge: 'msedge', chrome: 'chrome', firefox: 'firefox', opera: 'opera', vivaldi: 'vivaldi', brave: 'brave' }[brand];
+    if (!process) { resolve({ supported: false, reason: '无法识别浏览器' }); return; }
+    const script = ELEVATION_SCRIPT.replace('__PROCESS__', process);
+    try {
+      execFile(executable, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encodeScript(script)], {
+        timeout: EXEC_TIMEOUT_MS, windowsHide: true,
+      }, (error, stdout) => {
+        const match = /RESULT ({.*})/.exec(String(stdout ?? ''));
+        if (error || !match) { resolve({ supported: false, reason: '查询失败' }); return; }
+        try {
+          const parsed = JSON.parse(match[1]);
+          resolve({ supported: true, brand, ...parsed });
+        } catch { resolve({ supported: false, reason: '查询结果无法解析' }); }
+      });
+    } catch { resolve({ supported: false, reason: '无法启动解释器' }); }
+  });
+}
+
 /** WinRT NotificationSetting 的取值含义。 */
 export const SETTING_STATES = Object.freeze({
   0: 'allowed', 1: 'disabled-for-app', 2: 'disabled-for-user',

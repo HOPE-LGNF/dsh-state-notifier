@@ -51,7 +51,12 @@ function transportOf(connection) {
     const route = connection.routes.get('/api/state-notifier');
     assert.equal(typeof route?.fetch, 'function', '插件必须实际注册受认证的精确 Fetch 路由');
     const request = new Request('http://dsh.internal/api/state-notifier', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        // 宿主按 UA 推断浏览器品牌；测试用 Edge 的 UA。
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0',
+      },
       body: JSON.stringify({ type: 'client-request', rpcId: 'host-test-rpc', method: 'state-notifier', payload }),
       signal,
     });
@@ -80,6 +85,7 @@ async function boot(config = {}, output = {}) {
         probe: output.probe,
         notify: output.notify,
         test: output.test,
+        detectBrowserElevation: output.detectBrowserElevation,
       });
     },
   });
@@ -429,4 +435,31 @@ test('Host：无可执行文件时测试通道给出原因而不是抛错', asyn
   assert.equal(result.ok, true);
   assert.equal(result.value.ok, false);
   assert.equal(result.value.reason.length > 0, true);
+});
+
+test('Host：探测动作回报浏览器权限，普通与提权分别给出文案依据', async t => {
+  for (const [elevated, total, expectKey] of [[0, 5, 'normal'], [2, 5, 'elevated'], [0, 0, 'none']]) {
+    const h = await boot({}, {
+      probe: () => ({ platform: 'win32', wsl: false, available: true, candidates: ['/fake/powershell.exe'], reason: '' }),
+      detectBrowserElevation: async (exe, brand) => ({ supported: true, brand, total, elevated, unknown: 0 }),
+    });
+    t.after(() => h.stop());
+    const result = await within(h.call({ action: 'probe' }), 15000);
+    assert.equal(result.ok, true);
+    assert.equal(result.value.browser.supported, true);
+    assert.equal(result.value.browser.total, total);
+    assert.equal(result.value.browser.elevated, elevated);
+    assert.equal(expectKey === 'elevated', elevated > 0);
+  }
+});
+
+test('Host：无法识别浏览器或非 Windows 时，探测不抛错且给出原因', async t => {
+  const h = await boot({}, {
+    probe: () => ({ platform: 'linux', wsl: false, available: false, candidates: [], reason: '当前不是 WSL 环境' }),
+  });
+  t.after(() => h.stop());
+  const result = await within(h.call({ action: 'probe' }), 15000);
+  assert.equal(result.ok, true);
+  assert.equal(result.value.browser.supported, false);
+  assert.equal(typeof result.value.browser.reason, 'string');
 });

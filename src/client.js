@@ -5,6 +5,9 @@ import { createBrowserNotifier, LABELS, SOUND_PRESET_LABELS, ICON_CHOICES, CUSTO
 
 export const inject = ['slots', 'connection'];
 
+// 面板打开时取一次浏览器权限信息；宿主侧另按品牌缓存 60 秒。
+let lastProbeAt = 0;
+
 const h = React.createElement;
 const row = (key, children) => h('div', { key, className: 'dsn-field' }, children);
 const toggle = (key, text, checked, onChange, help) => h('label', { key, className: 'dsn-setting' },
@@ -86,6 +89,12 @@ export function apply(ctx) {
         if (value.path) setManualPath(value.path);
       } catch { /* 失败由下一次探测暴露 */ }
     };
+    React.useEffect(() => {
+      // 面板打开时取一次浏览器权限信息；宿主侧另有 60 秒缓存。
+      if (Date.now() - lastProbeAt < 60_000) return;
+      lastProbeAt = Date.now();
+      void runProbe();
+    }, []);
     const STATE_TEXT = {
       allowed: '系统允许通知',
       'disabled-for-app': '该应用的通知被关闭（设置 → 系统 → 通知 → DeepSeek Harness）',
@@ -190,6 +199,13 @@ export function apply(ctx) {
         h('dl', { key: 'status', className: 'dsn-runtime' }, [
           ['连接', state.transport], ['声音', state.soundStatus], ['桌面通知', state.desktopStatus], ['多标签页', state.tabStatus],
           ['宿主输出策略', { auto: '自动', browser: '浏览器', terminal: '终端', none: '关闭' }[state.playback]],
+          ...(native?.browser ? [['浏览器权限', (() => {
+            const b = native.browser;
+            if (!b.supported) return `未知（${b.reason ?? '无法检测'}）`;
+            if (b.total === 0) return '未检测到该品牌的浏览器进程（进程名可能不在支持列表）';
+            if (b.elevated > 0) return `检测到 ${b.elevated} 个管理员权限实例；点击通知可能无法激活窗口`;
+            return '普通权限';
+          })()]] : []),
         ].map(([label, value]) => h('div', { key: label }, h('dt', null, label), h('dd', null, value)))),
         ...[state.storageStatus, state.resetMessage, state.navigationError].filter(Boolean).map(text => h('p', { key: text, className: 'dsn-notice' }, text)),
       ]),

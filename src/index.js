@@ -1,7 +1,7 @@
 import z from '@deepseek-ai/schemastery';
 import { createNotifier } from './core.js';
 import { createJournal } from './journal.js';
-import { notify as nativeNotify, probe as nativeProbe, resolveExecutable as nativeResolve, test as nativeTest } from './native.js';
+import { browserBrand, detectBrowserElevation as nativeElevation, notify as nativeNotify, probe as nativeProbe, resolveExecutable as nativeResolve, test as nativeTest } from './native.js';
 
 export const name = 'state-notifier';
 export const inject = [];
@@ -30,6 +30,9 @@ export function apply(ctx, input = {}, output = {}) {
   const probeImpl = output.probe ?? nativeProbe;
   const sendImpl = output.notify ?? nativeNotify;
   const testImpl = output.test ?? nativeTest;
+  const elevationImpl = output.detectBrowserElevation ?? nativeElevation;
+  // 提权检测按品牌缓存 60 秒：一次查询要启动 PowerShell，不能放进每次轮询。
+  let elevationCache = { at: 0, brand: '', value: null };
   let detectedCache;
   const detect = () => (detectedCache ??= probeImpl());
   // 运行时覆盖：面板改动立即生效；重启后回到 profile 配置的值。
@@ -56,6 +59,18 @@ export function apply(ctx, input = {}, output = {}) {
       timer.unref?.();
       timers.add(timer);
     }
+  };
+  const browserElevation = async userAgent => {
+    const info = browserBrand(userAgent);
+    if (!info) return { supported: false, reason: '无法识别浏览器' };
+    const found = detect();
+    if (found.platform !== 'win32' && !found.wsl) return { supported: false, reason: '仅 Windows 与 WSL' };
+    if (!found.available) return { supported: false, reason: '未找到可用的解释器' };
+    const now = Date.now();
+    if (elevationCache.brand === info.brand && now - elevationCache.at < 60_000) return elevationCache.value;
+    const value = await elevationImpl(found.candidates[0], info.brand);
+    elevationCache = { at: now, brand: info.brand, value };
+    return value;
   };
   const shortId = id => {
     const text = String(id ?? '').replace(/^session-/, '').trim();
@@ -115,7 +130,7 @@ export function apply(ctx, input = {}, output = {}) {
         const manual = mode === 'manual' ? nativeResolve('manual', nativePath, detect()) : null;
         return Response.json({
           type: 'server-response', rpcId: body.rpcId,
-          result: { ok: true, value: { ...detect(), mode, manual, lastNative, resolved: nativeResolve(mode, nativePath, detect()) } },
+          result: { ok: true, value: { ...detect(), mode, manual, lastNative, resolved: nativeResolve(mode, nativePath, detect()), browser: await browserElevation(request.headers.get('user-agent') ?? '') } },
         });
       }
       if (body.payload?.action === 'testNative') {

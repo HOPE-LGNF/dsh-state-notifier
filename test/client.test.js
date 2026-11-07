@@ -47,15 +47,18 @@ test('component settings and bell share preferences and keep polling across view
     const enabled = walk(page).find(node => node.type === 'input' && node.props.type === 'checkbox');
     enabled.props.onChange({ target: { checked: false } });
     h.close();
-    assert.equal(h.requests.length, 1, 'closing the view must not restart polling');
-    assert.equal(h.requests[0][3].aborted, false, 'closing the view must not stop polling');
+    // 面板打开时会额外发一次 probe；这里只统计轮询请求。
+    const polls = h.requests.filter(([, , payload]) => payload && 'cursor' in payload);
+    assert.equal(polls.length, 1, 'closing the view must not restart polling');
+    assert.equal(polls[0][3].aborted, false, 'closing the view must not stop polling');
     const bell = h.render(h.entries.get('conversation.session.header.utilities').render());
     assert.equal(walk(bell).find(node => node.type === 'input' && node.props.type === 'checkbox').props.checked, false);
     h.close();
     const reopened = h.render(entry.render({ view: 'page' }));
     assert.equal(walk(reopened).find(node => node.type === 'input' && node.props.type === 'checkbox').props.checked, false);
   } finally { h.dispose(); }
-  assert.equal(h.requests[0][3].aborted, true, 'plugin disposal must abort the pending subscription');
+  const polls = h.requests.filter(([, , payload]) => payload && 'cursor' in payload);
+  assert.equal(polls[0][3].aborted, true, 'plugin disposal must abort the pending subscription');
 });
 
 test('hosts without a component slot retain the session bell without general settings registration', () => {
